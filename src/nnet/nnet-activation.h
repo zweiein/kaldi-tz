@@ -315,6 +315,34 @@ class Rectifier : public Component {
 
 
 
+class LeakyRectifier : public Component {
+ public:
+  LeakyRectifier(int32 dim_in, int32 dim_out)
+    : Component(dim_in, dim_out)
+  { }
+  ~LeakyRectifier()
+  { }
+
+  Component* Copy() const { return new LeakyRectifier(*this); }
+  ComponentType GetType() const { return kLeakyRectifier; }
+
+  void PropagateFnc(const CuMatrixBase<BaseFloat> &in, CuMatrixBase<BaseFloat> *out) {
+    out->CopyFromMat(in);
+    out->ApplyLeakyFloor(0.0, 0.01);
+  }
+
+  void BackpropagateFnc(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &out,
+                  const CuMatrixBase<BaseFloat> &out_diff, CuMatrixBase<BaseFloat> *in_diff) {
+    in_diff->CopyFromMat(in);
+    in_diff->ApplyLeakyHeaviside(0.01);
+    in_diff->MulElements(out_diff);
+
+  }
+};
+
+
+
+
 
 } // namespace nnet1
 } // namespace kaldi

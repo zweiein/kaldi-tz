@@ -2028,6 +2028,47 @@ void CuMatrixBase<Real>::ApplyFloor(Real floor_val) {
 }
 
 template<typename Real>
+void CuMatrixBase<Real>::ApplyLeakyFloor(Real floor_val, Real floor_leaky_coef) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    dim3 dimBlock(CU2DBLOCK, CU2DBLOCK);
+    dim3 dimGrid(n_blocks(NumCols(), CU2DBLOCK), n_blocks(NumRows(), CU2DBLOCK));
+
+    cuda_apply_leaky_floor(dimGrid, dimBlock, data_, floor_val, floor_leaky_coef, Dim());
+    CU_SAFE_CALL(cudaGetLastError());
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    Mat().ApplyLeakyFloor(floor_val, floor_leaky_coef);
+  }
+}
+
+
+template<typename Real>
+void CuMatrixBase<Real>::ApplyLeakyHeaviside(Real floor_leaky_coef) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    dim3 dimBlock(CU2DBLOCK, CU2DBLOCK);
+    dim3 dimGrid(n_blocks(NumRows(), CU2DBLOCK),
+                 n_blocks(NumCols(), CU2DBLOCK));
+    
+    cuda_apply_leaky_heaviside(dimGrid, dimBlock, data_, Dim(), floor_leaky_coef);
+    CU_SAFE_CALL(cudaGetLastError());
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    KALDI_WARN << "CPU version of ApplyLeakyHeaviside not realised yet. ";
+	KALDI_ASSERT(0);
+  }
+}
+
+
+
+template<typename Real>
 void CuMatrixBase<Real>::ApplyCeiling(Real ceiling_val) {
 #if HAVE_CUDA == 1
   if (CuDevice::Instantiate().Enabled()) {

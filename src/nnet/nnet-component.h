@@ -64,6 +64,7 @@ class Component {
     kDropout,
     kLengthNormComponent,
     kRectifier,
+    kLeakyRectifier,
 
     kTranform = 0x0400,
     kRbm,

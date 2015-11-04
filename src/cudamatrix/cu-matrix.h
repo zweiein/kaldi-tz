@@ -333,7 +333,9 @@ class CuMatrixBase {
   ///< multiply the result by the sign of the input.
   void ApplyPowAbs(Real power, bool include_sign=false);
   void ApplyHeaviside(); ///< For each element, sets x = (x > 0 ? 1.0 : 0.0)
-  void ApplyFloor(Real floor_val);
+  void ApplyFloor(Real floor_val);  
+  void ApplyLeakyFloor(Real floor_val, Real floor_leaky_coef); /// x = (x < floor_val ? x*floor_leaky_coef : x)  
+  void ApplyLeakyHeaviside(Real floor_leaky_coef); ///< For each element, sets x = (x > 0 ? 1.0 : floor_leaky_coef)
   void ApplyCeiling(Real ceiling_val);
   void ApplyExp();
   /// Softmax nonlinearity

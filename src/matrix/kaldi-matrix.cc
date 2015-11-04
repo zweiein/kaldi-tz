@@ -1915,6 +1915,17 @@ void MatrixBase<Real>::ApplyFloor(Real floor_val) {
 }
 
 template<typename Real>
+void MatrixBase<Real>::ApplyLeakyFloor(Real floor_val, Real floor_leaky_coef) {
+  MatrixIndexT num_rows = num_rows_, num_cols = num_cols_;
+  for (MatrixIndexT i = 0; i < num_rows; i++) {
+    Real *data = this->RowData(i);
+    for (MatrixIndexT j = 0; j < num_cols; j++)
+      data[j] = (data[j] < floor_val ? floor_leaky_coef * data[j] : data[j]);
+  }
+}
+
+
+template<typename Real>
 void MatrixBase<Real>::ApplyCeiling(Real ceiling_val) {
   MatrixIndexT num_rows = num_rows_, num_cols = num_cols_;
   for (MatrixIndexT i = 0; i < num_rows; i++) {

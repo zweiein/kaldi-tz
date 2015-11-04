@@ -1351,6 +1351,35 @@ static void _apply_floor(Real* mat, Real floor_val, MatrixDim d) {
 
 template<typename Real>
 __global__
+static void _apply_leaky_floor(Real* mat, Real floor_val, Real floor_leaky_coef, MatrixDim d) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  int index = i + j * d.stride;
+
+  if (i < d.cols && j < d.rows) {
+    if (mat[index] < floor_val)
+      mat[index] *= floor_leaky_coef;
+  }
+}
+
+
+
+
+template<typename Real>
+__global__
+static void _apply_leaky_heaviside(Real* mat, MatrixDim d, Real floor_leaky_coef) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  int index = i * d.stride + j;
+
+  if (i < d.rows && j < d.cols) {
+    mat[index] = (mat[index] > 0.0 ? 1.0 : floor_leaky_coef);
+  }
+}
+
+
+template<typename Real>
+__global__
 static void _copy_cols(Real* dst, const Real *src, const MatrixIndexT_cuda* reorder, MatrixDim dst_dim, int src_stride) {
   // Note: in this kernel, the x dimension corresponds to rows and the y to columns,
   // as it will be going forward.
@@ -2270,6 +2299,24 @@ void cudaF_add_to_rows_direct(dim3 Gr, dim3 Bl, float alpha, float* const* dst, 
 void cudaF_apply_floor(dim3 Gr, dim3 Bl, float* mat, float floor_val, MatrixDim d) {
   _apply_floor<<<Gr,Bl>>>(mat, floor_val, d);
 }
+
+void cudaF_apply_leaky_floor(dim3 Gr, dim3 Bl, float* mat, float floor_val, float floor_leaky_coef, MatrixDim d) {
+  _apply_leaky_floor<<<Gr,Bl>>>(mat, floor_val, floor_leaky_coef, d);
+}
+
+void cudaD_apply_leaky_floor(dim3 Gr, dim3 Bl, double* mat, double floor_val, double floor_leaky_coef, MatrixDim d) {
+  _apply_leaky_floor<<<Gr,Bl>>>(mat, floor_val, floor_leaky_coef, d);
+}
+
+void cudaF_apply_leaky_heaviside(dim3 Gr, dim3 Bl, float* mat, MatrixDim d, float floor_leaky_coef) {
+  _apply_leaky_heaviside<<<Gr,Bl>>>(mat, d, floor_leaky_coef);
+
+}
+
+void cudaD_apply_leaky_heaviside(dim3 Gr, dim3 Bl, double* mat, MatrixDim d, double floor_leaky_coef) {
+  _apply_leaky_heaviside<<<Gr,Bl>>>(mat, d, floor_leaky_coef);
+}
+
 
 void cudaF_apply_ceiling(dim3 Gr, dim3 Bl, float* mat, float ceiling_val, MatrixDim d) {
   _apply_ceiling<<<Gr,Bl>>>(mat, ceiling_val, d);
