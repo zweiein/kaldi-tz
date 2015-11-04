@@ -63,6 +63,7 @@ class Component {
     kTanh,
     kDropout,
     kLengthNormComponent,
+    kRectifier,
 
     kTranform = 0x0400,
     kRbm,

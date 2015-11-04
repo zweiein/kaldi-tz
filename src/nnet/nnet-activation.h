@@ -289,6 +289,33 @@ class Dropout : public Component {
 
 
 
+class Rectifier : public Component {
+ public:
+  Rectifier(int32 dim_in, int32 dim_out)
+    : Component(dim_in, dim_out)
+  { }
+  ~Rectifier()
+  { }
+
+  Component* Copy() const { return new Rectifier(*this); }
+  ComponentType GetType() const { return kRectifier; }
+
+  void PropagateFnc(const CuMatrixBase<BaseFloat> &in, CuMatrixBase<BaseFloat> *out) {
+    out->CopyFromMat(in);
+    out->ApplyFloor(0.0);
+  }
+
+  void BackpropagateFnc(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &out,
+                  const CuMatrixBase<BaseFloat> &out_diff, CuMatrixBase<BaseFloat> *in_diff) {
+    in_diff->CopyFromMat(in);
+    in_diff->ApplyHeaviside();
+    in_diff->MulElements(out_diff);
+  }
+};
+
+
+
+
 } // namespace nnet1
 } // namespace kaldi
 

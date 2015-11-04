@@ -61,6 +61,7 @@ const struct Component::key_value Component::kMarkerMap[] = {
   { Component::kTanh,"<Tanh>" },
   { Component::kDropout,"<Dropout>" },
   { Component::kLengthNormComponent,"<LengthNormComponent>" },
+  { Component::kRectifier,"<Rectifier>" },
   { Component::kRbm,"<Rbm>" },
   { Component::kSplice,"<Splice>" },
   { Component::kCopy,"<Copy>" },
@@ -141,6 +142,9 @@ Component* Component::NewComponentOfType(ComponentType comp_type,
       break;
     case Component::kLengthNormComponent :
       ans = new LengthNormComponent(input_dim, output_dim); 
+      break;
+    case Component::kRectifier :
+      ans = new Rectifier(input_dim, output_dim);
       break;
     case Component::kRbm :
       ans = new Rbm(input_dim, output_dim);
