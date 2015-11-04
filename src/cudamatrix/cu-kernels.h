@@ -332,6 +332,10 @@ inline void cuda_apply_leaky_floor(dim3 Gr, dim3 Bl, double* mat, double floor_v
 inline void cuda_apply_leaky_floor(dim3 Gr, dim3 Bl, float* mat, float floor_val, float floor_leaky_coef, MatrixDim dim) { cudaF_apply_leaky_floor(Gr,Bl,mat,floor_val,floor_leaky_coef,dim); }
 inline void cuda_apply_leaky_heaviside(dim3 Gr, dim3 Bl, double* mat, MatrixDim dim, double floor_leaky_coef) { cudaD_apply_leaky_heaviside(Gr,Bl,mat,dim,floor_leaky_coef); }
 inline void cuda_apply_leaky_heaviside(dim3 Gr, dim3 Bl, float* mat, MatrixDim dim, float floor_leaky_coef) { cudaF_apply_leaky_heaviside(Gr,Bl,mat,dim,floor_leaky_coef); }
+inline void cuda_apply_temporal_floor(dim3 Gr, dim3 Bl, const float *rows, float floor_coef, float *dst, MatrixDim d, int src_stride) { cudaF_apply_temporal_floor(Gr,Bl,rows,floor_coef,dst,d,src_stride); }
+inline void cuda_apply_temporal_floor(dim3 Gr, dim3 Bl, const double *rows, double floor_coef, double *dst, MatrixDim d, int src_stride) { cudaD_apply_temporal_floor(Gr,Bl,rows,floor_coef,dst,d,src_stride); }
+inline void cuda_apply_temporal_heaviside(dim3 Gr, dim3 Bl, const float* floor_rows, float* mat, MatrixDim dim, int src_stride, float floor_coef) { cudaF_apply_temporal_heaviside(Gr,Bl,floor_rows,mat,dim,src_stride,floor_coef); }
+inline void cuda_apply_temporal_heaviside(dim3 Gr, dim3 Bl, const double* floor_rows, double* mat, MatrixDim dim, int src_stride, double floor_coef) { cudaD_apply_temporal_heaviside(Gr,Bl,floor_rows,mat,dim,src_stride,floor_coef); }
 
 inline void cuda_apply_ceiling(dim3 Gr, dim3 Bl, double* mat, double ceiling_val, MatrixDim dim) { cudaD_apply_ceiling(Gr,Bl,mat,ceiling_val,dim); }
 inline void cuda_copy_cols(dim3 Gr, dim3 Bl, double* dst, const double* src, const MatrixIndexT_cuda* reorder, MatrixDim dst_dim, int src_stride) {

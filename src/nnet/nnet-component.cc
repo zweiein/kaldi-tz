@@ -61,8 +61,9 @@ const struct Component::key_value Component::kMarkerMap[] = {
   { Component::kTanh,"<Tanh>" },
   { Component::kDropout,"<Dropout>" },
   { Component::kLengthNormComponent,"<LengthNormComponent>" },
-  { Component::kLeakyRectifier,"<LeakyRectifier>" },
   { Component::kRectifier,"<Rectifier>" },
+  { Component::kLeakyRectifier,"<LeakyRectifier>" },
+  { Component::kTemporalRectifier,"<TemporalRectifier>" },
   { Component::kRbm,"<Rbm>" },
   { Component::kSplice,"<Splice>" },
   { Component::kCopy,"<Copy>" },
@@ -149,6 +150,9 @@ Component* Component::NewComponentOfType(ComponentType comp_type,
       break;
     case Component::kLeakyRectifier :
       ans = new LeakyRectifier(input_dim, output_dim);
+      break;
+    case Component::kTemporalRectifier :
+      ans = new TemporalRectifier(input_dim, output_dim);
       break;
     case Component::kRbm :
       ans = new Rbm(input_dim, output_dim);

@@ -1378,6 +1378,34 @@ static void _apply_leaky_heaviside(Real* mat, MatrixDim d, Real floor_leaky_coef
 }
 
 
+
+template<typename Real>
+__global__
+static void _apply_temporal_floor(const Real* floor_rows, Real floor_coef, Real* dst, MatrixDim d, int src_stride) {
+  int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_cuda j = blockIdx.y * blockDim.y + threadIdx.y;
+  int32_cuda index = i + j*d.stride;
+  int32_cuda src_index = i + j*src_stride;
+  if (i < d.cols && j < d.rows)
+      if ( dst[index] <= floor_rows[src_index] )
+	    dst[index] *= floor_coef;
+}
+
+
+template<typename Real>
+__global__
+static void _apply_temporal_heaviside(const Real* floor_rows, Real* mat, MatrixDim d, int src_stride, Real floor_coef) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  int index = i * d.stride + j;
+  int src_index = i * src_stride + j;
+  if (i < d.rows && j < d.cols) {
+    mat[index] = (mat[index] > floor_rows[src_index] ? 1.0 : floor_coef);
+  }
+}
+
+
+
 template<typename Real>
 __global__
 static void _copy_cols(Real* dst, const Real *src, const MatrixIndexT_cuda* reorder, MatrixDim dst_dim, int src_stride) {
@@ -2317,6 +2345,23 @@ void cudaD_apply_leaky_heaviside(dim3 Gr, dim3 Bl, double* mat, MatrixDim d, dou
   _apply_leaky_heaviside<<<Gr,Bl>>>(mat, d, floor_leaky_coef);
 }
 
+
+void cudaF_apply_temporal_floor(dim3 Gr, dim3 Bl, const float* rows, float floor_coef, float* dst, MatrixDim d, int src_stride) {
+  _apply_temporal_floor<<<Gr,Bl>>>(rows,floor_coef,dst,d,src_stride); 
+}
+
+void cudaD_apply_temporal_floor(dim3 Gr, dim3 Bl, const double* rows, double floor_coef, double* dst, MatrixDim d, int src_stride) {
+  _apply_temporal_floor<<<Gr,Bl>>>(rows,floor_coef,dst,d,src_stride); 
+}
+
+void cudaF_apply_temporal_heaviside(dim3 Gr, dim3 Bl, const float* in, float* mat, MatrixDim d, int src_stride, float floor_coef) {
+  _apply_temporal_heaviside<<<Gr,Bl>>>(in, mat, d, src_stride, floor_coef);
+
+}
+
+void cudaD_apply_temporal_heaviside(dim3 Gr, dim3 Bl, const double* in, double* mat, MatrixDim d, int src_stride, double floor_coef) {
+  _apply_temporal_heaviside<<<Gr,Bl>>>(in,mat, d, src_stride, floor_coef);
+}
 
 void cudaF_apply_ceiling(dim3 Gr, dim3 Bl, float* mat, float ceiling_val, MatrixDim d) {
   _apply_ceiling<<<Gr,Bl>>>(mat, ceiling_val, d);

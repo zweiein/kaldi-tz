@@ -336,6 +336,8 @@ class CuMatrixBase {
   void ApplyFloor(Real floor_val);  
   void ApplyLeakyFloor(Real floor_val, Real floor_leaky_coef); /// x = (x < floor_val ? x*floor_leaky_coef : x)  
   void ApplyLeakyHeaviside(Real floor_leaky_coef); ///< For each element, sets x = (x > 0 ? 1.0 : floor_leaky_coef)
+  void ApplyTemporalFloor(CuMatrixBase<Real> &floor_rows, Real floor_coef); /// each element has its own floor
+  void ApplyTemporalHeaviside(const CuMatrixBase<Real> &floor_rows, Real floor_coef); 
   void ApplyCeiling(Real ceiling_val);
   void ApplyExp();
   /// Softmax nonlinearity

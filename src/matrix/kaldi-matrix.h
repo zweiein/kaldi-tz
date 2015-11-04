@@ -327,6 +327,9 @@ class MatrixBase {
   /// x = (x < floor_val ? x*floor_leaky_coef : x)
   void ApplyLeakyFloor(Real floor_val, Real floor_leaky_coef); 
 
+  /// each element has its own floor  
+  void ApplyTemporalFloor(MatrixBase<Real> &floor_rows, Real floor_coef);
+
   /// Applies floor to all matrix elements
   void ApplyCeiling(Real ceiling_val);
 

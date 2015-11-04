@@ -401,6 +401,49 @@ void Nnet::ResetLstmStreams(const std::vector<int32> &stream_reset_flag) {
   }
 }
 
+
+void Nnet::ResetRectifierStreams(const std::vector<int32> &stream_reset_flag, int32 hid_dim) {
+  for (int32 c=0; c < NumComponents(); c++) {
+    if (GetComponent(c).GetType() == Component::kTemporalRectifier) {
+      TemporalRectifier& comp = dynamic_cast<TemporalRectifier&>(GetComponent(c));
+      comp.ResetRectifierStreams(stream_reset_flag, hid_dim);
+    }
+  }
+}
+
+void Nnet::SetRectifierMomentum(BaseFloat momentum){
+  for (int32 c=0; c < NumComponents(); c++) {
+    if (GetComponent(c).GetType() == Component::kTemporalRectifier) {
+      TemporalRectifier& comp = dynamic_cast<TemporalRectifier&>(GetComponent(c));
+      comp.SetRectifierMomentum(momentum);
+    }
+  }
+}
+
+
+
+void Nnet::SetRectifierTrainingStat(bool training_stat) {
+  for (int32 c=0; c < NumComponents(); c++) {
+    if (GetComponent(c).GetType() == Component::kTemporalRectifier) {
+      TemporalRectifier& comp = dynamic_cast<TemporalRectifier&>(GetComponent(c));
+      comp.SetRectifierTrainingStat(training_stat);
+    }
+  }
+}
+
+
+
+bool Nnet::GetRectifierTrainingStat() {
+  for (int32 c=0; c < NumComponents(); c++) {
+    if (GetComponent(c).GetType() == Component::kTemporalRectifier) {
+      TemporalRectifier& comp = dynamic_cast<TemporalRectifier&>(GetComponent(c));
+      return comp.GetRectifierTrainingStat();
+    }
+  }
+  return false;
+}
+
+
 void Nnet::SetSeqLengths(const std::vector<int32> &sequence_lengths) {
   for (int32 c=0; c < NumComponents(); c++) {
     if (GetComponent(c).GetType() == Component::kBLstmProjectedStreams) {

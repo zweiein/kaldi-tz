@@ -342,6 +342,113 @@ class LeakyRectifier : public Component {
 
 
 
+class TemporalRectifier : public Component {
+ public:
+  TemporalRectifier(int32 dim_in, int32 dim_out)
+    : Component(dim_in, dim_out), nstream_(0), momentum_(0.9), floor_coef(0.0), training_stat_(false)
+  { }
+  ~TemporalRectifier()
+  { }
+
+  Component* Copy() const { return new TemporalRectifier(*this); }
+  ComponentType GetType() const { return kTemporalRectifier; }
+
+  void ResetRectifierStreams(const std::vector<int32> &stream_reset_flag, int32 hid_dim) {
+      // allocate prev_rectifier_state_ if not done yet,
+      if (nstream_ == 0) {
+        // Karel: we just got number of streams! (before the 1st batch comes)
+        nstream_ = stream_reset_flag.size(); 
+        prev_rectifier_state_.Resize(nstream_, hid_dim, kSetZero);
+        KALDI_LOG << "Running training with " << nstream_ << " streams.";
+      }
+      // reset flag: 1 - reset stream network state
+      KALDI_ASSERT(prev_rectifier_state_.NumRows() == stream_reset_flag.size());
+      for (int s = 0; s < stream_reset_flag.size(); s++) {
+          if (stream_reset_flag[s] == 1) {
+              prev_rectifier_state_.Row(s).SetZero();
+          }
+      }
+  }
+
+
+  void PropagateFnc(const CuMatrixBase<BaseFloat> &in, CuMatrixBase<BaseFloat> *out) {
+        int32 hid_dim = in.NumCols();
+
+        if (training_stat_ == false){
+            nstream_ = 1;
+            prev_rectifier_state_.Resize(nstream_, hid_dim, kSetZero);
+            KALDI_LOG << "Running nnet-forward with per-utterance LSTM-state reset";
+        }
+
+        KALDI_ASSERT(nstream_ > 0);
+
+        KALDI_ASSERT(in.NumRows() % nstream_ == 0);
+        int32 T = in.NumRows() / nstream_;
+        int32 S = nstream_;
+
+        // 0:forward pass history, [1, T]:current sequence, T+1:dummy
+        rectifier_states_.Resize((T+2)*S, hid_dim, kSetZero);  
+        CuMatrix<BaseFloat> out_buf;
+        out_buf.Resize(in.NumRows(), in.NumCols());
+        out_buf.CopyFromMat(in);
+        CuSubMatrix<BaseFloat> state_(rectifier_states_.RowRange(0*S,S));
+        state_.CopyFromMat(prev_rectifier_state_);
+
+        for (int t = 1; t <= T; t++) {
+            CuSubMatrix<BaseFloat> out_t(out_buf.RowRange((t-1)*S,S));
+            CuSubMatrix<BaseFloat> stata_t(rectifier_states_.RowRange((t-1)*S,S));
+            CuSubMatrix<BaseFloat> stata_t_1(rectifier_states_.RowRange(t*S,S));
+            out_t.ApplyTemporalFloor(stata_t, floor_coef);
+            
+            //more delicate method to calculate future threshhold waits to be analysed
+            stata_t_1.AddMat(momentum_, stata_t, kNoTrans); 
+            stata_t_1.AddMat(1.0-momentum_, out_t, kNoTrans); 
+            
+        }
+
+        prev_rectifier_state_.CopyFromMat(rectifier_states_.RowRange(T*S,S));
+
+        out->CopyFromMat(out_buf);
+    
+  }
+
+  void BackpropagateFnc(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &out,
+        const CuMatrixBase<BaseFloat> &out_diff, CuMatrixBase<BaseFloat> *in_diff) {
+                  
+        int32 T = in.NumRows() / nstream_;
+        int32 S = nstream_;
+        CuSubMatrix<BaseFloat> stata_t(rectifier_states_.RowRange(S, T*S)); 
+        in_diff->CopyFromMat(in);
+        in_diff->ApplyTemporalHeaviside( stata_t, floor_coef);
+        in_diff->MulElements(out_diff);
+  }
+
+  bool GetRectifierTrainingStat(){
+      return training_stat_;
+  }
+
+  void SetRectifierTrainingStat(bool training_stat){
+      training_stat_ = training_stat;
+  }
+
+  void SetRectifierMomentum(BaseFloat momentum){
+      momentum_ = momentum;
+
+  }
+
+
+ private:
+    int32 nstream_;
+    BaseFloat momentum_;
+    BaseFloat floor_coef;
+    bool training_stat_;
+
+    CuMatrix<BaseFloat> prev_rectifier_state_;
+    CuMatrix<BaseFloat> rectifier_states_;
+ 
+};
+
+
 
 
 } // namespace nnet1

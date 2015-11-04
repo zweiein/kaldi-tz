@@ -65,6 +65,7 @@ class Component {
     kLengthNormComponent,
     kRectifier,
     kLeakyRectifier,
+    kTemporalRectifier,
 
     kTranform = 0x0400,
     kRbm,

@@ -105,6 +105,12 @@ class Nnet {
   /// Reset streams in LSTM multi-stream training,
   void ResetLstmStreams(const std::vector<int32> &stream_reset_flag);
 
+  /// 4 methods for TemporalRectifier
+  void ResetRectifierStreams(const std::vector<int32> &stream_reset_flag, int32 hid_dim);
+  void SetRectifierTrainingStat(bool training_stat);
+  void SetRectifierMomentum(BaseFloat momentum);
+  bool GetRectifierTrainingStat();
+
   /// set sequence length in LSTM multi-stream training
   void SetSeqLengths(const std::vector<int32> &sequence_lengths);
 

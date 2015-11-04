@@ -2069,6 +2069,48 @@ void CuMatrixBase<Real>::ApplyLeakyHeaviside(Real floor_leaky_coef) {
 
 
 template<typename Real>
+void CuMatrixBase<Real>::ApplyTemporalFloor(CuMatrixBase<Real> &floor_rows, Real floor_coef) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    dim3 dimBlock(CU2DBLOCK, CU2DBLOCK);
+    dim3 dimGrid(n_blocks(NumCols(), CU2DBLOCK), n_blocks(NumRows(), CU2DBLOCK));
+
+    cuda_apply_temporal_floor(dimGrid, dimBlock, floor_rows.data_, floor_coef, data_, Dim(), floor_rows.Stride());
+    CU_SAFE_CALL(cudaGetLastError());
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    Mat().ApplyTemporalFloor(floor_rows.Mat(), floor_coef);
+  }
+}
+
+
+
+template<typename Real>
+void CuMatrixBase<Real>::ApplyTemporalHeaviside(const CuMatrixBase<Real> &floor_rows, Real floor_coef) {
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    dim3 dimBlock(CU2DBLOCK, CU2DBLOCK);
+    dim3 dimGrid(n_blocks(NumRows(), CU2DBLOCK),
+                 n_blocks(NumCols(), CU2DBLOCK));
+    
+    cuda_apply_temporal_heaviside(dimGrid, dimBlock, floor_rows.data_, data_, Dim(), floor_rows.Stride(), floor_coef);
+    CU_SAFE_CALL(cudaGetLastError());
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    KALDI_WARN << "CPU version of ApplyTemporalHeaviside not realised yet. Stopped. ";
+	KALDI_ASSERT(0);
+  }
+}
+
+
+
+template<typename Real>
 void CuMatrixBase<Real>::ApplyCeiling(Real ceiling_val) {
 #if HAVE_CUDA == 1
   if (CuDevice::Instantiate().Enabled()) {
