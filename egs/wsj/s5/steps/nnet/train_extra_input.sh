@@ -61,10 +61,10 @@ echo "$0 $@"  # Print the command line for logging
 
 . parse_options.sh || exit 1;
 
-
-if [ $# != 6 ]; then
-   echo "Usage: $0 <data-train> <data-dev> <lang-dir> <ali-train> <ali-dev> <exp-dir>"
-   echo " e.g.: $0 data/train data/cv data/lang exp/mono_ali_train exp/mono_ali_cv exp/mono_nnet"
+echo "$# sdfasdfasdfasdfasdfa"
+if [ $# != 7 ]; then
+   echo "Usage: $0 <data-train> <data-dev> <lang-dir> <ali-train> <ali-dev> <exp-dir> <extra-input-model-dir>"
+   echo " e.g.: $0 data/train data/cv data/lang exp/mono_ali_train exp/mono_ali_cv exp/mono_nnet exp/extra_input_model"
    echo ""
    echo " Training data : <data-train>,<ali-train> (for optimizing cross-entropy)"
    echo " Held-out data : <data-dev>,<ali-dev> (for learn-rate/model selection based on cross-entopy)"
@@ -96,6 +96,7 @@ lang=$3
 alidir=$4
 alidir_cv=$5
 dir=$6
+extra_dir=$7
 
 # Using alidir for supervision (default)
 if [ -z "$labels" ]; then 
@@ -212,10 +213,27 @@ fi
 [ ! -z "$delta_opts" ] && echo "$delta_opts" >$dir/delta_opts
 #
 
+#feats_tr_extra="ark:nnet-forward --feature-transform=$extra_dir/final.feature_transform --use-gpu=yes $extra_dir/final.nnet \"$feats_tr\" ark:- |"
+#feats_cv_extra="ark:nnet-forward --feature-transform=$extra_dir/final.feature_transform --use-gpu=yes $extra_dir/final.nnet \"$feats_cv\" ark:- |"
+feats_tr_extra="$feats_tr nnet-forward --feature-transform=$extra_dir/final.feature_transform --use-gpu=yes $extra_dir/final.nnet ark:- ark:- |"
+feats_cv_extra="$feats_cv nnet-forward --feature-transform=$extra_dir/final.feature_transform --use-gpu=yes $extra_dir/final.nnet ark:- ark:- |"
+
+extra_input_cmvn_g=$dir/extra_input_cmvn_g.nnet
+
+compute-cmvn-stats "$feats_tr_extra" - | cmvn-to-nnet - $extra_input_cmvn_g
+
+feats_tr_extra="$feats_tr_extra nnet-forward --use-gpu=yes $extra_input_cmvn_g ark:- ark:- |"
+feats_cv_extra="$feats_cv_extra nnet-forward --use-gpu=yes $extra_input_cmvn_g ark:- ark:- |"
+
+#feats_tr_extra="$feats_tr nnet-forward --use-gpu=yes $extra_dir/final.feature_transform ark:- ark:- | nnet-forward --use-gpu=yes $extra_dir/final.nnet ark:- ark:- |"
+#feats_cv_extra="$feats_cv nnet-forward --use-gpu=yes $extra_dir/final.feature_transform ark:- ark:- | nnet-forward --use-gpu=yes $extra_dir/final.nnet ark:- ark:- |"
+
 # get feature dim
 echo "Getting feature dim : "
 feat_dim=$(feat-to-dim --print-args=false "$feats_tr" -)
+feat_dim_extra=$(feat-to-dim --print-args=false "$feats_tr_extra" -)
 echo "Feature dim is : $feat_dim"
+echo "Extra Feature dim is : $feat_dim_extra"
 
 # Now we will start building complex feature_transform which will 
 # be forwarded in CUDA to have fast run-time.
@@ -234,7 +252,7 @@ else
   echo "Using splice +/- $splice , step $splice_step"
   feature_transform=$dir/tr_splice$splice-$splice_step.nnet
   utils/nnet/gen_splice.py --fea-dim=$feat_dim --splice=$splice --splice-step=$splice_step > $feature_transform
-
+  
   # Choose further processing of spliced features
   echo "Feature type : $feat_type"
   case $feat_type in
@@ -381,7 +399,7 @@ fi
 ###### TRAIN ######
 echo
 echo "# RUNNING THE NN-TRAINING SCHEDULER"
-steps/nnet/train_scheduler.sh \
+steps/nnet/train_scheduler_extra_input.sh \
   --feature-transform $feature_transform \
   --learn-rate $learn_rate \
   --randomizer-seed $seed \
@@ -389,7 +407,7 @@ steps/nnet/train_scheduler.sh \
   ${train_tool:+ --train-tool "$train_tool"} \
   ${frame_weights:+ --frame-weights "$frame_weights"} \
   ${config:+ --config $config} \
-  $mlp_init "$feats_tr" "$feats_cv" "$labels_tr" "$labels_cv" $dir || exit 1
+  $mlp_init "$feats_tr" "$feats_tr_extra" "$feats_cv" "$feats_cv_extra" "$labels_tr" "$labels_cv" $dir || exit 1
 
 if $prepend_cnn; then
   echo "Preparing feature transform with CNN layers for RBM pre-training."

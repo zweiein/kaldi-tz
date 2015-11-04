@@ -29,7 +29,7 @@ halving_factor=0.5
 # misc.
 verbose=1
 # tool
-train_tool="nnet-train-frmshuff"
+train_tool="nnet-train-frmshuff-extra-input"
 frame_weights=
 
 objective_function="xent"
@@ -41,9 +41,9 @@ echo "$0 $@"  # Print the command line for logging
 
 . parse_options.sh || exit 1;
 
-if [ $# != 6 ]; then
-   echo "Usage: $0 <mlp-init> <feats-tr> <feats-cv> <labels-tr> <labels-cv> <exp-dir>"
-   echo " e.g.: $0 0.nnet scp:train.scp scp:cv.scp ark:labels_tr.ark ark:labels_cv.ark exp/dnn1"
+if [ $# != 8 ]; then
+   echo "Usage: $0 <mlp-init> <feats-tr> <feats-tr-extra> <feats-cv> <feats-cv-extra> <labels-tr> <labels-cv> <exp-dir>"
+   echo " e.g.: $0 0.nnet scp:train.scp scp:train_extra.scp scp:cv_extra.scp scp:cv.scp ark:labels_tr.ark ark:labels_cv.ark exp/dnn1"
    echo "main options (for others, see top of script file)"
    echo "  --config <config-file>  # config containing options"
    exit 1;
@@ -51,10 +51,12 @@ fi
 
 mlp_init=$1
 feats_tr=$2
-feats_cv=$3
-labels_tr=$4
-labels_cv=$5
-dir=$6
+feats_tr_extra=$3
+feats_cv=$4
+feats_cv_extra=$5
+labels_tr=$6
+labels_cv=$7
+dir=$8
 
 [ ! -d $dir ] && mkdir $dir
 [ ! -d $dir/log ] && mkdir $dir/log
@@ -79,7 +81,7 @@ $train_tool --cross-validate=true \
  --minibatch-size=$minibatch_size --randomizer-size=$randomizer_size --randomize=false --verbose=$verbose --objective-function=$objective_function \
  ${feature_transform:+ --feature-transform=$feature_transform} \
  ${frame_weights:+ "--frame-weights=$frame_weights"} \
- "$feats_cv" "$labels_cv" $mlp_best \
+ "$feats_cv" "$feats_cv_extra" "$labels_cv" $mlp_best \
  2>> $log || exit 1;
 
 loss=$(cat $dir/log/iter00.initial.log | grep "AvgLoss:" | tail -n 1 | awk '{ print $4; }')
@@ -106,7 +108,7 @@ for iter in $(seq -w $max_iters); do
    ${feature_transform:+ --feature-transform=$feature_transform} \
    ${frame_weights:+ "--frame-weights=$frame_weights"} \
    ${randomizer_seed:+ --randomizer-seed=$randomizer_seed} \
-   "$feats_tr" "$labels_tr" $mlp_best $mlp_next \
+   "$feats_tr" "$feats_tr_extra" "$labels_tr" $mlp_best $mlp_next \
    2>> $log || exit 1; 
 
   tr_loss=$(cat $dir/log/iter${iter}.tr.log | grep "AvgLoss:" | tail -n 1 | awk '{ print $4; }')
@@ -118,7 +120,7 @@ for iter in $(seq -w $max_iters); do
    --minibatch-size=$minibatch_size --randomizer-size=$randomizer_size --randomize=false --verbose=$verbose --objective-function=$objective_function \
    ${feature_transform:+ --feature-transform=$feature_transform} \
    ${frame_weights:+ "--frame-weights=$frame_weights"} \
-   "$feats_cv" "$labels_cv" $mlp_next \
+   "$feats_cv" "$feats_cv_extra" "$labels_cv" $mlp_next \
    2>>$log || exit 1;
   
   loss_new=$(cat $dir/log/iter${iter}.cv.log | grep "AvgLoss:" | tail -n 1 | awk '{ print $4; }')

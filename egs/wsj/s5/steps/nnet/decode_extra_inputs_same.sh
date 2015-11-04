@@ -26,7 +26,8 @@ skip_scoring=false
 scoring_opts="--min-lmwt 4 --max-lmwt 15"
 
 num_threads=1 # if >1, will use latgen-faster-parallel
-parallel_opts="-pe smp $((num_threads+1))" # use 2 CPUs (1 DNN-forward, 1 decoder)
+#parallel_opts="-pe smp $((num_threads+1))" # use 2 CPUs (1 DNN-forward, 1 decoder)
+parallel_opts="" # use 2 CPUs (1 DNN-forward, 1 decoder)
 use_gpu="no" # yes|no|optionaly
 # End configuration section.
 
@@ -35,8 +36,8 @@ echo "$0 $@"  # Print the command line for logging
 [ -f ./path.sh ] && . ./path.sh; # source the path.
 . parse_options.sh || exit 1;
 
-if [ $# != 3 ]; then
-   echo "Usage: $0 [options] <graph-dir> <data-dir> <decode-dir>"
+if [ $# != 4 ]; then
+   echo "Usage: $0 [options] <graph-dir> <data-dir> <extra_dir> <decode-dir>"
    echo "... where <decode-dir> is assumed to be a sub-directory of the directory"
    echo " where the DNN and transition model is."
    echo "e.g.: $0 exp/dnn1/graph_tgpr data/test exp/dnn1/decode_tgpr"
@@ -63,7 +64,8 @@ fi
 
 graphdir=$1
 data=$2
-dir=$3
+extra_dir=$3
+dir=$4
 [ -z $srcdir ] && srcdir=`dirname $dir`; # Default model directory one level up from decoding directory.
 sdata=$data/split$nj;
 
@@ -107,10 +109,12 @@ feats="ark,s,cs:copy-feats scp:$sdata/JOB/feats.scp ark:- |"
 [ ! -z "$delta_opts" ] && feats="$feats add-deltas $delta_opts ark:- ark:- |"
 #
 
+feats_extra="$feats nnet-forward --feature-transform=$extra_dir/final.feature_transform $extra_dir/final.nnet ark:- ark:- |"
+feats_extra="$feats_extra nnet-forward ${srcdir}/extra_input_cmvn_g.nnet ark:- ark:- |"
 # Run the decoding in the queue,
 if [ $stage -le 0 ]; then
   $cmd $parallel_opts JOB=1:$nj $dir/log/decode.JOB.log \
-    nnet-forward $nnet_forward_opts --feature-transform=$feature_transform --class-frame-counts=$class_frame_counts --use-gpu=$use_gpu $nnet "$feats" ark:- \| \
+    nnet-forward-extra-inputs-same $nnet_forward_opts --feature-transform=$feature_transform --class-frame-counts=$class_frame_counts --use-gpu=$use_gpu $nnet "$feats" "$feats_extra" ark:- \| \
     latgen-faster-mapped$thread_string --min-active=$min_active --max-active=$max_active --max-mem=$max_mem --beam=$beam \
     --lattice-beam=$lattice_beam --acoustic-scale=$acwt --allow-partial=true --word-symbol-table=$graphdir/words.txt \
     $model $graphdir/HCLG.fst ark:- "ark:|gzip -c > $dir/lat.JOB.gz" || exit 1;
