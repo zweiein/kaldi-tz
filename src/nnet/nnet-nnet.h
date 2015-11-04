@@ -46,11 +46,14 @@ class Nnet {
   void Propagate(const CuMatrixBase<BaseFloat> &in, CuMatrix<BaseFloat> *out);
   /// Perform forward pass through LSTM when hard and soft targets are both used, temperature of Softmax needs to be set for out_soft
   void Propagate(const CuMatrixBase<BaseFloat> &in, BaseFloat temperature, CuMatrix<BaseFloat> *out_hard, CuMatrix<BaseFloat> *out_soft);
+  /// with extra input(s)
+  void Propagate(const CuMatrixBase<BaseFloat> &in, const std::vector<CuMatrix<BaseFloat> >&in_extras, CuMatrix<BaseFloat> *out);
   /// Perform backward pass through the network
   void Backpropagate(const CuMatrixBase<BaseFloat> &out_diff, CuMatrix<BaseFloat> *in_diff);
   /// Perform forward pass through the network, don't keep buffers (use it when not training)
   void Feedforward(const CuMatrixBase<BaseFloat> &in, CuMatrix<BaseFloat> *out);
-
+  /// with extra input(s)
+  void Feedforward(const CuMatrixBase<BaseFloat> &in, const std::vector<CuMatrix<BaseFloat> >&in_extras, CuMatrix<BaseFloat> *out);
   /// Dimensionality on network input (input feature dim.)
   int32 InputDim() const;
   /// Dimensionality of network outputs (posteriors | bn-features | etc.)
@@ -151,6 +154,7 @@ class Nnet {
   std::vector<Component*> components_;
 
   std::vector<CuMatrix<BaseFloat> > propagate_buf_;  ///< buffers for forward pass
+  std::vector<CuMatrix<BaseFloat> > propagate_buf_extra_; ///< buffers for forward pass
   std::vector<CuMatrix<BaseFloat> > backpropagate_buf_;  ///< buffers for backward pass
 
   /// Option class with hyper-parameters passed to UpdatableComponent(s)

@@ -1,9 +1,7 @@
-// nnetbin/nnet-train-frmshuff.cc
+// nnetbin/nnet-train-frmshuff-extra-inputs-same.cc
 
 // Copyright 2013  Brno University of Technology (Author: Karel Vesely)
 
-// See ../../COPYING for clarification regarding multiple authors
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -58,14 +56,13 @@ int main(int argc, char *argv[]) {
     std::string objective_function = "xent";
     po.Register("objective-function", &objective_function, "Objective function : xent|mse");
 
+    int32 extra_input_layers[] = {0,2,4,6,8};
+    
     int32 length_tolerance = 5;
     po.Register("length-tolerance", &length_tolerance, "Allowed length difference of features/targets (frames)");
     
     std::string frame_weights;
     po.Register("frame-weights", &frame_weights, "Per-frame weights to scale gradients (frame selection/weighting).");
-
-    std::string utt_weights;
-    po.Register("utt-weights", &utt_weights, "Per-utterance weights (scalar applied to frame-weights).");
 
     std::string use_gpu="yes";
     po.Register("use-gpu", &use_gpu, "yes|no|optional, only has effect if compiled with CUDA");
@@ -76,18 +73,19 @@ int main(int argc, char *argv[]) {
     
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 4-(crossvalidate?1:0)) {
+    if (po.NumArgs() != 5-(crossvalidate?1:0)) {
       po.PrintUsage();
       exit(1);
     }
 
     std::string feature_rspecifier = po.GetArg(1),
-      targets_rspecifier = po.GetArg(2),
-      model_filename = po.GetArg(3);
+                feature_extra_rspecifier = po.GetArg(2),
+      targets_rspecifier = po.GetArg(3),
+      model_filename = po.GetArg(4);
         
     std::string target_model_filename;
     if (!crossvalidate) {
-      target_model_filename = po.GetArg(4);
+      target_model_filename = po.GetArg(5);
     }
 
     using namespace kaldi;
@@ -120,33 +118,21 @@ int main(int argc, char *argv[]) {
     kaldi::int64 total_frames = 0;
 
     SequentialBaseFloatMatrixReader feature_reader(feature_rspecifier);
+    SequentialBaseFloatMatrixReader feature_extra_reader(feature_extra_rspecifier);
     RandomAccessPosteriorReader targets_reader(targets_rspecifier);
     RandomAccessBaseFloatVectorReader weights_reader;
     if (frame_weights != "") {
       weights_reader.Open(frame_weights);
     }
-    RandomAccessBaseFloatReader utt_weights_reader;
-    if (utt_weights != "") {
-      utt_weights_reader.Open(utt_weights);
-    }
 
     RandomizerMask randomizer_mask(rnd_opts);
     MatrixRandomizer feature_randomizer(rnd_opts);
+    MatrixRandomizer feature_extra_randomizer(rnd_opts);
     PosteriorRandomizer targets_randomizer(rnd_opts);
     VectorRandomizer weights_randomizer(rnd_opts);
 
     Xent xent;
     Mse mse;
-    
-    MultiTaskLoss multitask;
-    if (0 == objective_function.compare(0,9,"multitask")) {
-      // objective_function contains something like : 
-      // 'multitask,xent,2456,1.0,mse,440,0.001'
-      //
-      // the meaning is following:
-      // 'multitask,<type1>,<dim1>,<weight1>,...,<typeN>,<dimN>,<weightN>'
-      multitask.InitFromString(objective_function);
-    }
     
     CuMatrix<BaseFloat> feats_transf, nnet_out, obj_diff;
 
@@ -154,15 +140,17 @@ int main(int argc, char *argv[]) {
     KALDI_LOG << (crossvalidate?"CROSS-VALIDATION":"TRAINING") << " STARTED";
 
     int32 num_done = 0, num_no_tgt_mat = 0, num_other_error = 0;
-    while (!feature_reader.Done()) {
+    while (!feature_reader.Done() && !feature_extra_reader.Done()) {
 #if HAVE_CUDA==1
       // check the GPU is not overheated
       CuDevice::Instantiate().CheckGpuHealth();
 #endif
       // fill the randomizer
-      for ( ; !feature_reader.Done(); feature_reader.Next()) {
-        if (feature_randomizer.IsFull()) break; // suspend, keep utt for next loop
+      for ( ; !feature_reader.Done() && !feature_extra_reader.Done(); feature_reader.Next(),feature_extra_reader.Next()) {
+        if (feature_randomizer.IsFull() || feature_extra_randomizer.IsFull()) break; // suspend, keep utt for next loop
         std::string utt = feature_reader.Key();
+        std::string utt_extra = feature_extra_reader.Key();
+        KALDI_ASSERT(utt == utt_extra);
         KALDI_VLOG(3) << "Reading " << utt;
         // check that we have targets
         if (!targets_reader.HasKey(utt)) {
@@ -176,14 +164,9 @@ int main(int argc, char *argv[]) {
           num_other_error++;
           continue;
         }
-        // check we have per-utterance weights
-        if (utt_weights != "" && !utt_weights_reader.HasKey(utt)) {
-          KALDI_WARN << utt << ", missing per-utterance weight";
-          num_other_error++;
-          continue;
-        }
         // get feature / target pair
         Matrix<BaseFloat> mat = feature_reader.Value();
+        Matrix<BaseFloat> mat_extra = feature_extra_reader.Value();
         Posterior targets = targets_reader.Value(utt);
         // get per-frame weights
         Vector<BaseFloat> weights;
@@ -193,14 +176,6 @@ int main(int argc, char *argv[]) {
           weights.Resize(mat.NumRows());
           weights.Set(1.0);
         }
-        // multiply with per-utterance weight,
-        if (utt_weights != "") {
-          BaseFloat w = utt_weights_reader.Value(utt);
-          KALDI_ASSERT(w >= 0.0);
-          if (w == 0.0) continue; // remove sentence from training,
-          weights.Scale(w);
-        }
-
         // correct small length mismatch ... or drop sentence
         {
           // add lengths to vector
@@ -213,7 +188,8 @@ int main(int argc, char *argv[]) {
           int32 max = *std::max_element(lenght.begin(),lenght.end());
           // fix or drop ?
           if (max - min < length_tolerance) {
-            if(mat.NumRows() != min) mat.Resize(min, mat.NumCols(), kCopyData);
+            if(mat.NumRows() != min) {mat.Resize(min, mat.NumCols(), kCopyData);
+                                mat_extra.Resize(min, mat_extra.NumCols(), kCopyData);}
             if(targets.size() != min) targets.resize(min);
             if(weights.Dim() != min) weights.Resize(min, kCopyData);
           } else {
@@ -225,14 +201,14 @@ int main(int argc, char *argv[]) {
         }
         // apply optional feature transform
         nnet_transf.Feedforward(CuMatrix<BaseFloat>(mat), &feats_transf);
-
         // pass data to randomizers
         KALDI_ASSERT(feats_transf.NumRows() == targets.size());
+        KALDI_ASSERT(CuMatrix<BaseFloat>(mat_extra).NumRows() == targets.size());
         feature_randomizer.AddData(feats_transf);
+        feature_extra_randomizer.AddData(CuMatrix<BaseFloat>(mat_extra));
         targets_randomizer.AddData(targets);
         weights_randomizer.AddData(weights);
         num_done++;
-      
         // report the speed
         if (num_done % 5000 == 0) {
           double time_now = time.Elapsed();
@@ -241,27 +217,37 @@ int main(int argc, char *argv[]) {
                         << " frames per second.";
         }
       }
-
       // randomize
       if (!crossvalidate && randomize) {
         const std::vector<int32>& mask = randomizer_mask.Generate(feature_randomizer.NumFrames());
         feature_randomizer.Randomize(mask);
+        feature_extra_randomizer.Randomize(mask);
         targets_randomizer.Randomize(mask);
         weights_randomizer.Randomize(mask);
       }
-
       // train with data from randomizers (using mini-batches)
-      for ( ; !feature_randomizer.Done(); feature_randomizer.Next(),
+      for ( ; !feature_randomizer.Done()&&!feature_extra_randomizer.Done(); feature_randomizer.Next(),
+                                           feature_extra_randomizer.Next(),
                                           targets_randomizer.Next(),
                                           weights_randomizer.Next()) {
         // get block of feature/target pairs
         const CuMatrixBase<BaseFloat>& nnet_in = feature_randomizer.Value();
+        const CuMatrixBase<BaseFloat>& nnet_in_extra = feature_extra_randomizer.Value();
         const Posterior& nnet_tgt = targets_randomizer.Value();
         const Vector<BaseFloat>& frm_weights = weights_randomizer.Value();
-
+        std::vector<CuMatrix<BaseFloat> >nnet_in_extras;
+        for(int v=0; v<nnet.NumComponents(); v++){
+            CuMatrix<BaseFloat> nnet_in_extra_temp;
+            nnet_in_extra_temp.Resize(nnet_in_extra.NumRows(), nnet_in_extra.NumCols(),kSetZero);
+            for(int w=0; w<sizeof(extra_input_layers)/sizeof(int32);w++){
+                if(v==extra_input_layers[w]){
+                  nnet_in_extra_temp.CopyFromMat(nnet_in_extra);
+                }
+            }
+            nnet_in_extras.push_back(nnet_in_extra_temp);
+        }
         // forward pass
-        nnet.Propagate(nnet_in, &nnet_out);
-
+        nnet.Propagate(nnet_in, nnet_in_extras, &nnet_out);
         // evaluate objective function we've chosen
         if (objective_function == "xent") {
           // gradients re-scaled by weights in Eval,
@@ -269,19 +255,14 @@ int main(int argc, char *argv[]) {
         } else if (objective_function == "mse") {
           // gradients re-scaled by weights in Eval,
           mse.Eval(frm_weights, nnet_out, nnet_tgt, &obj_diff);
-        } else if (0 == objective_function.compare(0,9,"multitask")) {
-          // gradients re-scaled by weights in Eval,
-          multitask.Eval(frm_weights, nnet_out, nnet_tgt, &obj_diff);
         } else {
           KALDI_ERR << "Unknown objective function code : " << objective_function;
         }
-
         // backward pass
         if (!crossvalidate) {
           // backpropagate
           nnet.Backpropagate(obj_diff, NULL);
         }
-
         // 1st minibatch : show what happens in network 
         if (kaldi::g_kaldi_verbose_level >= 1 && total_frames == 0) { // vlog-1
           KALDI_VLOG(1) << "### After " << total_frames << " frames,";
@@ -333,8 +314,6 @@ int main(int argc, char *argv[]) {
       KALDI_LOG << xent.Report();
     } else if (objective_function == "mse") {
       KALDI_LOG << mse.Report();
-    } else if (0 == objective_function.compare(0,9,"multitask")) {
-      KALDI_LOG << multitask.Report();
     } else {
       KALDI_ERR << "Unknown objective function code : " << objective_function;
     }

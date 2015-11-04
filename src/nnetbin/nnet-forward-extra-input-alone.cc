@@ -1,4 +1,4 @@
-// nnetbin/nnet-forward.cc
+// nnetbin/nnet-forward-extra-input-alone.cc
 
 // Copyright 2011-2013  Brno University of Technology (Author: Karel Vesely)
 
@@ -61,16 +61,20 @@ int main(int argc, char *argv[]) {
     int32 time_shift = 0;
     po.Register("time-shift", &time_shift, "LSTM : repeat last input frame N-times, discrad N initial output frames."); 
 
+    int32 extra_input_layer = 0;
+    po.Register("extra-input-layer", &extra_input_layer, "");
+
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 3) {
+    if (po.NumArgs() != 4) {
       po.PrintUsage();
       exit(1);
     }
 
     std::string model_filename = po.GetArg(1),
         feature_rspecifier = po.GetArg(2),
-        feature_wspecifier = po.GetArg(3);
+        feature_extra_rspecifier = po.GetArg(3),
+        feature_wspecifier = po.GetArg(4);
         
     //Select the GPU
 #if HAVE_CUDA==1
@@ -110,9 +114,10 @@ int main(int argc, char *argv[]) {
     kaldi::int64 tot_t = 0;
 
     SequentialBaseFloatMatrixReader feature_reader(feature_rspecifier);
+	SequentialBaseFloatMatrixReader feature_extra_reader(feature_extra_rspecifier);
     BaseFloatMatrixWriter feature_writer(feature_wspecifier);
 
-    CuMatrix<BaseFloat> feats, feats_transf, nnet_out;
+    CuMatrix<BaseFloat> feats, nnet_in_extra, feats_transf, nnet_out;
     Matrix<BaseFloat> nnet_out_host;
 
 
@@ -120,16 +125,20 @@ int main(int argc, char *argv[]) {
     double time_now = 0;
     int32 num_done = 0;
     // iterate over all feature files
-    for (; !feature_reader.Done(); feature_reader.Next()) {
+    for (; !feature_reader.Done() && !feature_extra_reader.Done(); feature_reader.Next(), feature_extra_reader.Next()) {
       // read
       Matrix<BaseFloat> mat = feature_reader.Value();
+	  Matrix<BaseFloat> mat_extra = feature_extra_reader.Value();
       std::string utt = feature_reader.Key();
+	  std::string utt_extra = feature_extra_reader.Key();
+	  KALDI_ASSERT(utt == utt_extra);
+	  
       KALDI_VLOG(2) << "Processing utterance " << num_done+1 
                     << ", " << utt
                     << ", " << mat.NumRows() << "frm";
 
       
-      if (!KALDI_ISFINITE(mat.Sum())) { // check there's no nan/inf,
+      if (!KALDI_ISFINITE(mat.Sum()) || !KALDI_ISFINITE(mat_extra.Sum())) { // check there's no nan/inf,
         KALDI_ERR << "NaN or inf found in features for " << utt;
       }
 
@@ -137,13 +146,29 @@ int main(int argc, char *argv[]) {
       if (time_shift > 0) {
         int32 last_row = mat.NumRows() - 1; // last row,
         mat.Resize(mat.NumRows() + time_shift, mat.NumCols(), kCopyData);
+		mat_extra.Resize(mat.NumRows() + time_shift, mat_extra.NumCols(), kCopyData);
         for (int32 r = last_row+1; r<mat.NumRows(); r++) {
           mat.CopyRowFromVec(mat.Row(last_row), r); // copy last row,
+          mat_extra.CopyRowFromVec(mat_extra.Row(last_row), r); // copy last row,
         }
       }
       
       // push it to gpu,
       feats = mat;
+	  nnet_in_extra = mat_extra;
+
+	  
+	  std::vector<CuMatrix<BaseFloat> >nnet_in_extras;
+	   			  for(int v=0; v<nnet.NumComponents(); v++){
+	   				CuMatrix<BaseFloat> nnet_in_extra_temp;
+	   				nnet_in_extra_temp.Resize(nnet_in_extra.NumRows(), nnet_in_extra.NumCols(),kSetZero);
+	   			//	for(int w=0; w<sizeof(extra_input_layers)/sizeof(int32);w++){
+	   				  if(v==extra_input_layer){
+	   						  nnet_in_extra_temp.CopyFromMat(nnet_in_extra);
+	   				  }
+	   			//	}
+	   				nnet_in_extras.push_back(nnet_in_extra_temp);
+	   			  }
 
       // fwd-pass, feature transform,
       nnet_transf.Feedforward(feats, &feats_transf);
@@ -152,7 +177,7 @@ int main(int argc, char *argv[]) {
       }
 
       // fwd-pass, nnet,
-      nnet.Feedforward(feats_transf, &nnet_out);
+      nnet.Feedforward(feats_transf, nnet_in_extras, &nnet_out);
       if (!KALDI_ISFINITE(nnet_out.Sum())) { // check there's no nan/inf,
         KALDI_ERR << "NaN or inf found in nn-output for " << utt;
       }
@@ -219,7 +244,7 @@ int main(int argc, char *argv[]) {
     if (num_done == 0) return -1;
     return 0;
   } catch(const std::exception &e) {
-    std::cerr << e.what();
+    KALDI_ERR << e.what();
     return -1;
   }
 }

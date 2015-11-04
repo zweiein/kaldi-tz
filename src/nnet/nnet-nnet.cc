@@ -22,6 +22,7 @@
 #include "nnet/nnet-parallel-component.h"
 #include "nnet/nnet-activation.h"
 #include "nnet/nnet-affine-transform.h"
+#include "nnet/nnet-affine-transform-extra.h"
 #include "nnet/nnet-various.h"
 #include "nnet/nnet-lstm-projected-streams.h"
 #include "nnet/nnet-blstm-projected-streams.h"
@@ -38,6 +39,7 @@ Nnet::Nnet(const Nnet& other) {
   // create empty buffers
   propagate_buf_.resize(NumComponents()+1);
   backpropagate_buf_.resize(NumComponents()+1);
+  propagate_buf_extra_.resize(NumComponents()+1);
   // copy train opts
   SetTrainOptions(other.opts_);
   Check();
@@ -52,6 +54,7 @@ Nnet & Nnet::operator = (const Nnet& other) {
   // create empty buffers
   propagate_buf_.resize(NumComponents()+1);
   backpropagate_buf_.resize(NumComponents()+1);
+  propagate_buf_extra_.resize(NumComponents()+1);
   // copy train opts
   SetTrainOptions(other.opts_); 
   Check();
@@ -85,6 +88,37 @@ void Nnet::Propagate(const CuMatrixBase<BaseFloat> &in, CuMatrix<BaseFloat> *out
   (*out) = propagate_buf_[components_.size()];
 }
 
+
+void Nnet::Propagate(const CuMatrixBase<BaseFloat> &in, const std::vector<CuMatrix<BaseFloat> >&in_extras, CuMatrix<BaseFloat> *out) {
+  KALDI_ASSERT(NULL != out);
+
+  if (NumComponents() == 0) {
+    (*out) = in;
+    return;
+  }
+
+  KALDI_ASSERT((int32)propagate_buf_.size() >= NumComponents()+1);
+  KALDI_ASSERT((int32)propagate_buf_extra_.size() >= NumComponents()+1);
+
+  propagate_buf_[0].Resize(in.NumRows(), in.NumCols());
+  propagate_buf_[0].CopyFromMat(in);
+  for(int32 v=0; v<in_extras.size(); v++){
+    propagate_buf_extra_[v].Resize(in_extras[v].NumRows(), in_extras[v].NumCols());
+    propagate_buf_extra_[v].CopyFromMat(in_extras[v]);
+  }
+ 
+  for(int32 i=0; i<(int32)components_.size(); i++) {
+      if((components_[i]->GetType() == Component::kAffineTransformExtra)  && propagate_buf_extra_[i].Sum()!=0.0) { 
+        AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[i]);
+        comp->PropagateFnc(propagate_buf_[i], propagate_buf_extra_[i], &propagate_buf_[i+1]); //only realized in AffineTransformExtra
+      }
+    else{
+        components_[i]->Propagate(propagate_buf_[i], &propagate_buf_[i+1]);
+    }
+  }
+
+  (*out) = propagate_buf_[components_.size()];
+}
 
 void Nnet::Propagate(const CuMatrixBase<BaseFloat> &in, BaseFloat temperature, CuMatrix<BaseFloat> *out_hard, CuMatrix<BaseFloat> *out_soft) {
   KALDI_ASSERT(NULL != out_hard);
@@ -137,8 +171,14 @@ void Nnet::Backpropagate(const CuMatrixBase<BaseFloat> &out_diff, CuMatrix<BaseF
     components_[i]->Backpropagate(propagate_buf_[i], propagate_buf_[i+1],
                             backpropagate_buf_[i+1], &backpropagate_buf_[i]);
     if (components_[i]->IsUpdatable()) {
-      UpdatableComponent *uc = dynamic_cast<UpdatableComponent*>(components_[i]);
-      uc->Update(propagate_buf_[i], backpropagate_buf_[i+1]);
+      if(components_[i]->GetType() == Component::kAffineTransformExtra && propagate_buf_extra_[i].Sum() != 0.0){ 
+        AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[i]);
+        comp->UpdateExtra(propagate_buf_[i], propagate_buf_extra_[i], backpropagate_buf_[i+1]); //only realized in AffineTransformExtra
+      }
+      else {
+        UpdatableComponent *uc = dynamic_cast<UpdatableComponent*>(components_[i]);
+        uc->Update(propagate_buf_[i], backpropagate_buf_[i+1]);
+      }
     }
   }
   // eventually export the derivative
@@ -173,6 +213,66 @@ void Nnet::Feedforward(const CuMatrixBase<BaseFloat> &in, CuMatrix<BaseFloat> *o
     components_[L]->Propagate(propagate_buf_[(L-1)%2], &propagate_buf_[L%2]);
   }
   components_[L]->Propagate(propagate_buf_[(L-1)%2], out);
+  // release the buffers we don't need anymore
+  propagate_buf_[0].Resize(0,0);
+  propagate_buf_[1].Resize(0,0);
+}
+
+
+
+void Nnet::Feedforward(const CuMatrixBase<BaseFloat> &in, const std::vector<CuMatrix<BaseFloat> >&in_extras, CuMatrix<BaseFloat> *out) {
+  KALDI_ASSERT(NULL != out);
+
+  if (NumComponents() == 0) { 
+    out->Resize(in.NumRows(), in.NumCols());
+    out->CopyFromMat(in); 
+    return; 
+  }
+
+  if (NumComponents() == 1) {
+      if(components_[0]->GetType() == Component::kAffineTransformExtra && in_extras[0].Sum()!=0.0){ 
+        AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[0]);
+        comp->PropagateFnc(in, in_extras[0], out); //only realized in AffineTransformExtra
+      }
+      else{
+        components_[0]->Propagate(in, out);
+      }
+      return;
+  }
+
+  // we need at least 2 input buffers
+  KALDI_ASSERT(propagate_buf_.size() >= 2);
+
+  // propagate by using exactly 2 auxiliary buffers
+  int32 L = 0;
+  if(components_[L]->GetType() == Component::kAffineTransformExtra && in_extras[0].Sum()!=0.0){ 
+        AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[L]);
+        comp->PropagateFnc(in, in_extras[0], &propagate_buf_[L%2]); //only realized in AffineTransformExtra
+  }
+  else{
+        components_[L]->Propagate(in, &propagate_buf_[L%2]);
+  }
+  //components_[L]->Propagate(in, &propagate_buf_[L%2]);
+  
+  for(L++; L<=NumComponents()-2; L++) {
+       if(components_[L]->GetType() == Component::kAffineTransformExtra && in_extras[L].Sum()!=0.0){ 
+         AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[L]);
+         comp->PropagateFnc(propagate_buf_[(L-1)%2], in_extras[L], &propagate_buf_[L%2]); //only realized in AffineTransformExtra
+       }
+       else{
+        components_[L]->Propagate(propagate_buf_[(L-1)%2], &propagate_buf_[L%2]);
+       }
+    //components_[L]->Propagate(propagate_buf_[(L-1)%2], &propagate_buf_[L%2]);
+  }
+
+  if(components_[L]->GetType() == Component::kAffineTransformExtra && in_extras[L].Sum()!=0.0){ 
+        AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[L]);
+        comp->PropagateFnc(propagate_buf_[(L-1)%2], in_extras[L], out); //only realized in AffineTransformExtra
+  }
+  else{
+        components_[L]->Propagate(propagate_buf_[(L-1)%2], out);
+  }
+  // components_[L]->Propagate(propagate_buf_[(L-1)%2], out);
   // release the buffers we don't need anymore
   propagate_buf_[0].Resize(0,0);
   propagate_buf_[1].Resize(0,0);
@@ -277,6 +377,21 @@ void Nnet::GetWeights(Vector<BaseFloat>* wei_copy) const {
           wei_copy->Range(pos,vec.Dim()).CopyFromVec(vec);
           pos += vec.Dim();
         } break;
+        case Component::kAffineTransformExtra : {
+          // copy weight matrix row-by-row to the vector
+          Matrix<BaseFloat> mat(dynamic_cast<AffineTransformExtra*>(components_[n])->GetLinearity());
+          Matrix<BaseFloat> mat_extra(dynamic_cast<AffineTransformExtra*>(components_[n])->GetLinearityExtra());
+          int32 mat_size = mat.NumRows()*mat.NumCols();
+          wei_copy->Range(pos,mat_size).CopyRowsFromMat(mat);
+          pos += mat_size;
+          mat_size = mat_extra.NumRows()*mat_extra.NumCols();
+          wei_copy->Range(pos,mat_size).CopyRowsFromMat(mat_extra);
+          pos += mat_size;                
+          // append biases
+          Vector<BaseFloat> vec(dynamic_cast<AffineTransformExtra*>(components_[n])->GetBias());
+          wei_copy->Range(pos,vec.Dim()).CopyFromVec(vec);
+          pos += vec.Dim();
+        } break;
         default :
           KALDI_ERR << "Unimplemented access to parameters "
                     << "of updatable component " 
@@ -310,6 +425,29 @@ void Nnet::SetWeights(const Vector<BaseFloat>& wei_src) {
           aff_t->SetLinearity(CuMatrix<BaseFloat>(mat));
           aff_t->SetBias(CuVector<BaseFloat>(vec));
         } break;
+        case Component::kAffineTransformExtra : {
+          // get the component
+          AffineTransformExtra* aff_t = dynamic_cast<AffineTransformExtra*>(components_[n]);
+          // we need weight matrix with original dimensions
+          Matrix<BaseFloat> mat(aff_t->GetLinearity());
+          int32 mat_size = mat.NumRows()*mat.NumCols();
+          mat.CopyRowsFromVec(wei_src.Range(pos,mat_size));
+          pos += mat_size;
+
+          Matrix<BaseFloat> mat_extra(aff_t->GetLinearityExtra());
+          int32 mat_extra_size = mat_extra.NumRows()*mat_extra.NumCols();
+          mat_extra.CopyRowsFromVec(wei_src.Range(pos,mat_extra_size));
+          pos += mat_extra_size;
+          
+          // get the bias vector
+          Vector<BaseFloat> vec(aff_t->GetBias());
+          vec.CopyFromVec(wei_src.Range(pos,vec.Dim()));
+          pos += vec.Dim();
+          // assign to the component
+          aff_t->SetLinearity(CuMatrix<BaseFloat>(mat));
+          aff_t->SetLinearityExtra(CuMatrix<BaseFloat>(mat_extra));
+          aff_t->SetBias(CuVector<BaseFloat>(vec));
+        } break;
         default :
           KALDI_ERR << "Unimplemented access to parameters "
                     << "of updatable component " 
@@ -341,6 +479,34 @@ void Nnet::GetGradient(Vector<BaseFloat>* grad_copy) const {
           // get the biases from CuVector to Vector
           const CuVector<BaseFloat>& cu_vec = 
             dynamic_cast<AffineTransform*>(components_[n])->GetBiasCorr();
+          Vector<BaseFloat> vec(cu_vec.Dim());
+          cu_vec.CopyToVec(&vec);
+          // append biases to the supervector
+          grad_copy->Range(pos,vec.Dim()).CopyFromVec(vec);
+          pos += vec.Dim();
+        } break;
+        case Component::kAffineTransformExtra : {
+          // get the weights from CuMatrix to Matrix
+          const CuMatrixBase<BaseFloat>& cu_mat = 
+            dynamic_cast<AffineTransformExtra*>(components_[n])->GetLinearityCorr();
+          Matrix<BaseFloat> mat(cu_mat.NumRows(),cu_mat.NumCols());
+          cu_mat.CopyToMat(&mat);
+          // copy the the matrix row-by-row to the vector
+          int32 mat_size = mat.NumRows()*mat.NumCols();
+          grad_copy->Range(pos,mat_size).CopyRowsFromMat(mat);
+          pos += mat_size;
+
+          const CuMatrixBase<BaseFloat>& cu_mat_extra = 
+            dynamic_cast<AffineTransformExtra*>(components_[n])->GetLinearityExtraCorr();
+          Matrix<BaseFloat> mat_extra(cu_mat_extra.NumRows(),cu_mat_extra.NumCols());
+          cu_mat_extra.CopyToMat(&mat_extra);
+          // copy the the matrix row-by-row to the vector
+          int32 mat_extra_size = mat_extra.NumRows()*mat_extra.NumCols();
+          grad_copy->Range(pos,mat_extra_size).CopyRowsFromMat(mat_extra);
+          pos += mat_extra_size;
+          // get the biases from CuVector to Vector
+          const CuVector<BaseFloat>& cu_vec = 
+            dynamic_cast<AffineTransformExtra*>(components_[n])->GetBiasCorr();
           Vector<BaseFloat> vec(cu_vec.Dim());
           cu_vec.CopyToVec(&vec);
           // append biases to the supervector
@@ -499,6 +665,7 @@ void Nnet::Read(std::istream &is, bool binary) {
   }
   // create empty buffers
   propagate_buf_.resize(NumComponents()+1);
+  propagate_buf_extra_.resize(NumComponents()+1);
   backpropagate_buf_.resize(NumComponents()+1);
   // reset learn rate
   opts_.learn_rate = 0.0;
