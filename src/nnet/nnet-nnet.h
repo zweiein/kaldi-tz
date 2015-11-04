@@ -44,6 +44,8 @@ class Nnet {
  public:
   /// Perform forward pass through the network
   void Propagate(const CuMatrixBase<BaseFloat> &in, CuMatrix<BaseFloat> *out);
+  /// Perform forward pass through LSTM when hard and soft targets are both used, temperature of Softmax needs to be set for out_soft
+  void Propagate(const CuMatrixBase<BaseFloat> &in, BaseFloat temperature, CuMatrix<BaseFloat> *out_hard, CuMatrix<BaseFloat> *out_soft);
   /// Perform backward pass through the network
   void Backpropagate(const CuMatrixBase<BaseFloat> &out_diff, CuMatrix<BaseFloat> *in_diff);
   /// Perform forward pass through the network, don't keep buffers (use it when not training)
@@ -98,6 +100,8 @@ class Nnet {
 
   /// Set the dropout rate
   void SetDropoutRetention(BaseFloat r);
+  /// Set the temperature in Softmax
+  void SetTemperature(BaseFloat t);
   /// Reset streams in LSTM multi-stream training,
   void ResetLstmStreams(const std::vector<int32> &stream_reset_flag);
 

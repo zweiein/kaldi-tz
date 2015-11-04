@@ -1,4 +1,4 @@
-// nnetbin/nnet-train-lstm-streams.cc
+// nnetbin/nnet-train-lstm-streams-dual-targets.cc
 
 // Copyright 2015  Brno University of Technology (Author: Karel Vesely)
 //           2014  Jiayu DU (Jerry), Wei Li
@@ -37,12 +37,11 @@ int main(int argc, char *argv[]) {
   try {
     const char *usage =
         "Perform one iteration of LSTM training by Stochastic Gradient Descent.\n"
-        "This version use pdf-posterior as targets, prepared typically by ali-to-post.\n"
         "The updates are done per-utterance, shuffling options are dummy for compatibility reason.\n"
         "\n"
-        "Usage: nnet-train-lstm-streams [options] <feature-rspecifier> <targets-rspecifier> <model-in> [<model-out>]\n"
+        "Usage: nnet-train-lstm-streams [options] <feature-rspecifier> <hard-targets-rspecifier> <soft-targets-rspecifier> <model-in> [<model-out>]\n"
         "e.g.: \n"
-        " nnet-train-lstm-streams scp:feature.scp ark:posterior.ark nnet.init nnet.iter1\n";
+        " nnet-train-lstm-streams scp:feature.scp ark:posterior.ark ark:Matrix.ark nnet.init nnet.iter1\n";
 
     ParseOptions po(usage);
 
@@ -90,21 +89,31 @@ int main(int argc, char *argv[]) {
     bool randomize = false;
     po.Register("randomize", &randomize, "Dummy option, for compatibility...");
     //
+
+    BaseFloat temperature = 1.0;
+    po.Register("temperature", &temperature, "");
+
+    BaseFloat hard_scale = 0.0;
+    po.Register("hard-scale", &hard_scale, "");
+
+    BaseFloat soft_scale = 1.0;
+    po.Register("soft-scale", &soft_scale, "");
     
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 4-(crossvalidate?1:0)) {
+    if (po.NumArgs() != 5-(crossvalidate?1:0)) {
       po.PrintUsage();
       exit(1);
     }
 
     std::string feature_rspecifier = po.GetArg(1),
-      targets_rspecifier = po.GetArg(2),
-      model_filename = po.GetArg(3);
+      hard_targets_rspecifier = po.GetArg(2),
+      soft_targets_rspecifier = po.GetArg(3),
+      model_filename = po.GetArg(4);
         
     std::string target_model_filename;
     if (!crossvalidate) {
-      target_model_filename = po.GetArg(4);
+      target_model_filename = po.GetArg(5);
     }
 
     using namespace kaldi;
@@ -125,10 +134,14 @@ int main(int argc, char *argv[]) {
     nnet.Read(model_filename);
     nnet.SetTrainOptions(trn_opts);
 
+    KALDI_ASSERT(temperature > 0.0);
+    
+
     kaldi::int64 total_frames = 0;
 
     SequentialBaseFloatMatrixReader feature_reader(feature_rspecifier);
-    RandomAccessPosteriorReader target_reader(targets_rspecifier);
+    RandomAccessPosteriorReader hard_target_reader(hard_targets_rspecifier);
+    SequentialBaseFloatMatrixReader soft_target_reader(soft_targets_rspecifier);
     
     /*
     RandomAccessBaseFloatVectorReader weights_reader;
@@ -142,7 +155,7 @@ int main(int argc, char *argv[]) {
     PosteriorRandomizer targets_randomizer(rnd_opts);
     VectorRandomizer weights_randomizer(rnd_opts);
 
-    Xent xent;
+    Xent xent_hard, xent_soft;
     Mse mse;
     
     Timer time;
@@ -153,17 +166,20 @@ int main(int argc, char *argv[]) {
     //  book-keeping for multi-streams
     std::vector<std::string> keys(num_stream);
     std::vector<Matrix<BaseFloat> > feats(num_stream);
-    std::vector<Posterior> targets(num_stream);
+    std::vector<Posterior> hard_targets(num_stream);
+    std::vector<Matrix<BaseFloat> > soft_targets(num_stream);
     std::vector<int> curt(num_stream, 0);
     std::vector<int> lent(num_stream, 0);
     std::vector<int> new_utt_flags(num_stream, 0);
 
     // bptt batch buffer
     int32 feat_dim = nnet.InputDim();
+    int32 out_dim = nnet.OutputDim();
     Vector<BaseFloat> frame_mask(batch_size * num_stream, kSetZero);
     Matrix<BaseFloat> feat(batch_size * num_stream, feat_dim, kSetZero);
-    Posterior target(batch_size * num_stream);
-    CuMatrix<BaseFloat> feat_transf, nnet_out, obj_diff;
+    Posterior hard_target(batch_size * num_stream);
+    Matrix<BaseFloat> soft_target(batch_size * num_stream, out_dim, kSetZero);    
+    CuMatrix<BaseFloat> feat_transf, nnet_out_hard, nnet_out_soft, obj_diff_hard, obj_diff_soft;
 
     while (1) {
         // loop over all streams, check if any stream reaches the end of its utterance,
@@ -183,19 +199,22 @@ int main(int argc, char *argv[]) {
                 nnet_transf.Feedforward(CuMatrix<BaseFloat>(mat), &feat_transf);
                 
                 // get the labels,
-                if (!target_reader.HasKey(key)) {
+                if (!hard_target_reader.HasKey(key) || soft_target_reader.Key() != key) {
                     KALDI_WARN << key << ", missing targets";
                     num_no_tgt_mat++;
                     feature_reader.Next();
+                    soft_target_reader.Next();
                     continue;
                 }
-                const Posterior& target = target_reader.Value(key);
+                const Posterior& hard_target_utt= hard_target_reader.Value(key);
+                const Matrix<BaseFloat>& soft_target_utt = soft_target_reader.Value();
 
                 // check that the length matches,
-                if (feat_transf.NumRows() != target.size()) {
+                if (feat_transf.NumRows() != hard_target_utt.size() || feat_transf.NumRows() != soft_target_utt.NumRows()) {
                     KALDI_WARN << key << ", length miss-match between feats and targets, skip";
                     num_other_error++;
                     feature_reader.Next();
+                    soft_target_reader.Next();
                     continue;
                 }
 
@@ -203,11 +222,13 @@ int main(int argc, char *argv[]) {
                 keys[s] = key;
                 feats[s].Resize(feat_transf.NumRows(), feat_transf.NumCols());
                 feat_transf.CopyToMat(&feats[s]); 
-                targets[s] = target;
+                hard_targets[s] = hard_target_utt;
+                soft_targets[s] = soft_target_utt;
                 curt[s] = 0;
                 lent[s] = feats[s].NumRows();
                 new_utt_flags[s] = 1;  // a new utterance feeded to this stream
                 feature_reader.Next();
+                soft_target_reader.Next();
                 break;
             }
         }
@@ -228,10 +249,12 @@ int main(int argc, char *argv[]) {
                 // frame_mask & targets padding
                 if (curt[s] < lent[s]) {
                     frame_mask(t * num_stream + s) = 1;
-                    target[t * num_stream + s] = targets[s][curt[s]];
+                    hard_target[t * num_stream + s] = hard_targets[s][curt[s]];
+                    soft_target.Row(t * num_stream + s).CopyFromVec(soft_targets[s].Row(curt[s]));
                 } else {
                     frame_mask(t * num_stream + s) = 0;
-                    target[t * num_stream + s] = targets[s][lent[s]-1];
+                    hard_target[t * num_stream + s] = hard_targets[s][lent[s]-1];
+                    soft_target.Row(t * num_stream + s).CopyFromVec(soft_targets[s].Row(curt[s]-1));
                 }
                 // feat shifting & padding
                 if (curt[s] + targets_delay < lent[s]) {
@@ -248,11 +271,12 @@ int main(int argc, char *argv[]) {
         nnet.ResetLstmStreams(new_utt_flags);
 
         // forward pass
-        nnet.Propagate(CuMatrix<BaseFloat>(feat), &nnet_out);
+        nnet.Propagate(CuMatrix<BaseFloat>(feat), temperature, &nnet_out_hard, &nnet_out_soft);
     
         // evaluate objective function we've chosen
         if (objective_function == "xent") {
-            xent.Eval(frame_mask, nnet_out, target, &obj_diff);
+            xent_hard.Eval(frame_mask, nnet_out_hard, hard_target, &obj_diff_hard);
+            xent_soft.Eval(frame_mask, nnet_out_soft, CuMatrix<BaseFloat>(soft_target), &obj_diff_soft);
         //} else if (objective_function == "mse") {     // not supported yet
         //    mse.Eval(frame_mask, nnet_out, targets_batch, &obj_diff);
         } else {
@@ -261,7 +285,13 @@ int main(int argc, char *argv[]) {
     
         // backward pass
         if (!crossvalidate) {
-            nnet.Backpropagate(obj_diff, NULL);
+            obj_diff_hard.Scale(hard_scale);
+            if(hard_scale != 0.0) { //when hard targets are used too
+              obj_diff_soft.Scale(temperature);
+            }
+            obj_diff_soft.Scale(soft_scale);
+            obj_diff_soft.AddMat(1.0, obj_diff_hard);
+            nnet.Backpropagate(obj_diff_soft, NULL);
         }
 
         // 1st minibatch : show what happens in network 
@@ -342,7 +372,7 @@ int main(int argc, char *argv[]) {
               << "]";  
 
     if (objective_function == "xent") {
-      KALDI_LOG << xent.Report();
+      KALDI_LOG << xent_hard.Report();
     } else if (objective_function == "mse") {
       KALDI_LOG << mse.Report();
     } else {

@@ -6,11 +6,11 @@ include ../kaldi.mk
 LDFLAGS += $(CUDA_LDFLAGS)
 LDLIBS += $(CUDA_LDLIBS)
 
-BINFILES = nnet-train-frmshuff \
+BINFILES = nnet-train-frmshuff nnet-train-frmshuff-dual-targets \
         nnet-train-perutt \
         nnet-train-mmi-sequential \
         nnet-train-mpe-sequential \
-        nnet-train-lstm-streams nnet-train-blstm-streams \
+        nnet-train-lstm-streams nnet-train-blstm-streams nnet-train-lstm-streams-dual-targets \
         rbm-train-cd1-frmshuff rbm-convert-to-nnet \
         nnet-forward nnet-copy nnet-info nnet-concat \
         transf-to-nnet cmvn-to-nnet nnet-initialize \

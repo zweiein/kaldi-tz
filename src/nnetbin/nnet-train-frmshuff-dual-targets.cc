@@ -1,4 +1,4 @@
-// nnetbin/nnet-train-frmshuff.cc
+// nnetbin/nnet-train-frmshuff-dual-targets.cc
 
 // Copyright 2013  Brno University of Technology (Author: Karel Vesely)
 
@@ -34,10 +34,9 @@ int main(int argc, char *argv[]) {
   try {
     const char *usage =
         "Perform one iteration of Neural Network training by mini-batch Stochastic Gradient Descent.\n"
-        "This version use pdf-posterior as targets, prepared typically by ali-to-post.\n"
-        "Usage:  nnet-train-frmshuff [options] <feature-rspecifier> <targets-rspecifier> <model-in> [<model-out>]\n"
+        "Usage:  nnet-train-frmshuff [options] <feature-rspecifier> <hard-targets-rspecifier> <soft-targets-rspecifier> <model-in> [<model-out>]\n"
         "e.g.: \n"
-        " nnet-train-frmshuff scp:feature.scp ark:posterior.ark nnet.init nnet.iter1\n";
+        " nnet-train-frmshuff scp:feature.scp ark:posterior.ark ark:Matrix.ark nnet.init nnet.iter1\n";
 
     ParseOptions po(usage);
 
@@ -72,22 +71,32 @@ int main(int argc, char *argv[]) {
     
     double dropout_retention = 0.0;
     po.Register("dropout-retention", &dropout_retention, "number between 0..1, saying how many neurons to preserve (0.0 will keep original value");
-     
+
+    BaseFloat temperature = 1.0;
+    po.Register("temperature", &temperature, "");
+
+    BaseFloat hard_scale = 0.0;
+    po.Register("hard-scale", &hard_scale, "");
+
+    BaseFloat soft_scale = 1.0;
+    po.Register("soft-scale", &soft_scale, "");
+    
     
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 4-(crossvalidate?1:0)) {
+    if (po.NumArgs() != 5-(crossvalidate?1:0)) {
       po.PrintUsage();
       exit(1);
     }
 
     std::string feature_rspecifier = po.GetArg(1),
-      targets_rspecifier = po.GetArg(2),
-      model_filename = po.GetArg(3);
+      hard_targets_rspecifier = po.GetArg(2),
+      soft_targets_rspecifier = po.GetArg(3),
+      model_filename = po.GetArg(4);
         
     std::string target_model_filename;
     if (!crossvalidate) {
-      target_model_filename = po.GetArg(4);
+      target_model_filename = po.GetArg(5);
     }
 
     using namespace kaldi;
@@ -117,10 +126,13 @@ int main(int argc, char *argv[]) {
       nnet.SetDropoutRetention(1.0);
     }
 
+    KALDI_ASSERT(temperature > 0.0);
+
     kaldi::int64 total_frames = 0;
 
     SequentialBaseFloatMatrixReader feature_reader(feature_rspecifier);
-    RandomAccessPosteriorReader targets_reader(targets_rspecifier);
+    RandomAccessPosteriorReader hard_targets_reader(hard_targets_rspecifier);
+    SequentialBaseFloatMatrixReader soft_targets_reader(soft_targets_rspecifier);
     RandomAccessBaseFloatVectorReader weights_reader;
     if (frame_weights != "") {
       weights_reader.Open(frame_weights);
@@ -132,23 +144,25 @@ int main(int argc, char *argv[]) {
 
     RandomizerMask randomizer_mask(rnd_opts);
     MatrixRandomizer feature_randomizer(rnd_opts);
-    PosteriorRandomizer targets_randomizer(rnd_opts);
+    PosteriorRandomizer hard_targets_randomizer(rnd_opts);
+    MatrixRandomizer soft_targets_randomizer(rnd_opts);
     VectorRandomizer weights_randomizer(rnd_opts);
 
-    Xent xent;
-    Mse mse;
+    Xent xent_hard, xent_soft;
+    Mse mse_hard, mse_soft;
     
-    MultiTaskLoss multitask;
+    MultiTaskLoss multitask_hard, multitask_soft;
     if (0 == objective_function.compare(0,9,"multitask")) {
       // objective_function contains something like : 
       // 'multitask,xent,2456,1.0,mse,440,0.001'
       //
       // the meaning is following:
       // 'multitask,<type1>,<dim1>,<weight1>,...,<typeN>,<dimN>,<weightN>'
-      multitask.InitFromString(objective_function);
+      multitask_hard.InitFromString(objective_function);
+      multitask_soft.InitFromString(objective_function);
     }
     
-    CuMatrix<BaseFloat> feats_transf, nnet_out, obj_diff;
+    CuMatrix<BaseFloat> feats_transf, nnet_out_hard, nnet_out_soft, obj_diff_hard, obj_diff_soft;
 
     Timer time;
     KALDI_LOG << (crossvalidate?"CROSS-VALIDATION":"TRAINING") << " STARTED";
@@ -160,12 +174,12 @@ int main(int argc, char *argv[]) {
       CuDevice::Instantiate().CheckGpuHealth();
 #endif
       // fill the randomizer
-      for ( ; !feature_reader.Done(); feature_reader.Next()) {
+      for ( ; !feature_reader.Done() && !soft_targets_reader.Done(); feature_reader.Next(), soft_targets_reader.Next()) {
         if (feature_randomizer.IsFull()) break; // suspend, keep utt for next loop
         std::string utt = feature_reader.Key();
         KALDI_VLOG(3) << "Reading " << utt;
         // check that we have targets
-        if (!targets_reader.HasKey(utt)) {
+        if (!hard_targets_reader.HasKey(utt) || soft_targets_reader.Key() != utt) {
           KALDI_WARN << utt << ", missing targets";
           num_no_tgt_mat++;
           continue;
@@ -184,7 +198,8 @@ int main(int argc, char *argv[]) {
         }
         // get feature / target pair
         Matrix<BaseFloat> mat = feature_reader.Value();
-        Posterior targets = targets_reader.Value(utt);
+        Posterior hard_targets = hard_targets_reader.Value(utt);
+        Matrix<BaseFloat> soft_targets = soft_targets_reader.Value();
         // get per-frame weights
         Vector<BaseFloat> weights;
         if (frame_weights != "") {
@@ -206,7 +221,8 @@ int main(int argc, char *argv[]) {
           // add lengths to vector
           std::vector<int32> lenght;
           lenght.push_back(mat.NumRows());
-          lenght.push_back(targets.size());
+          lenght.push_back(hard_targets.size());
+          lenght.push_back(soft_targets.NumRows());
           lenght.push_back(weights.Dim());
           // find min, max
           int32 min = *std::min_element(lenght.begin(),lenght.end());
@@ -214,10 +230,11 @@ int main(int argc, char *argv[]) {
           // fix or drop ?
           if (max - min < length_tolerance) {
             if(mat.NumRows() != min) mat.Resize(min, mat.NumCols(), kCopyData);
-            if(targets.size() != min) targets.resize(min);
+            if(hard_targets.size() != min) hard_targets.resize(min);
+            if(soft_targets.NumRows() != min) soft_targets.Resize(min, soft_targets.NumCols(), kCopyData);
             if(weights.Dim() != min) weights.Resize(min, kCopyData);
           } else {
-            KALDI_WARN << utt << ", length mismatch of targets " << targets.size()
+            KALDI_WARN << utt << ", length mismatch of targets " << hard_targets.size()
                        << " and features " << mat.NumRows();
             num_other_error++;
             continue;
@@ -227,9 +244,11 @@ int main(int argc, char *argv[]) {
         nnet_transf.Feedforward(CuMatrix<BaseFloat>(mat), &feats_transf);
 
         // pass data to randomizers
-        KALDI_ASSERT(feats_transf.NumRows() == targets.size());
+        KALDI_ASSERT(feats_transf.NumRows() == hard_targets.size());
+        KALDI_ASSERT(feats_transf.NumRows() == soft_targets.NumRows());
         feature_randomizer.AddData(feats_transf);
-        targets_randomizer.AddData(targets);
+        hard_targets_randomizer.AddData(hard_targets);
+        soft_targets_randomizer.AddData(CuMatrix<BaseFloat>(soft_targets));
         weights_randomizer.AddData(weights);
         num_done++;
       
@@ -246,32 +265,42 @@ int main(int argc, char *argv[]) {
       if (!crossvalidate && randomize) {
         const std::vector<int32>& mask = randomizer_mask.Generate(feature_randomizer.NumFrames());
         feature_randomizer.Randomize(mask);
-        targets_randomizer.Randomize(mask);
+        hard_targets_randomizer.Randomize(mask);
+        soft_targets_randomizer.Randomize(mask);
         weights_randomizer.Randomize(mask);
       }
 
       // train with data from randomizers (using mini-batches)
       for ( ; !feature_randomizer.Done(); feature_randomizer.Next(),
-                                          targets_randomizer.Next(),
+                                          hard_targets_randomizer.Next(),
+                                          soft_targets_randomizer.Next(),
                                           weights_randomizer.Next()) {
         // get block of feature/target pairs
         const CuMatrixBase<BaseFloat>& nnet_in = feature_randomizer.Value();
-        const Posterior& nnet_tgt = targets_randomizer.Value();
+        const Posterior& nnet_tgt_hard = hard_targets_randomizer.Value();
+        const CuMatrixBase<BaseFloat>& nnet_tgt_soft = soft_targets_randomizer.Value();
         const Vector<BaseFloat>& frm_weights = weights_randomizer.Value();
 
         // forward pass
-        nnet.Propagate(nnet_in, &nnet_out);
+        nnet.SetTemperature(1.0);
+        nnet.Propagate(nnet_in, &nnet_out_hard);
+        nnet.SetTemperature(temperature);        
+        nnet.Propagate(nnet_in, &nnet_out_soft);
+        
 
         // evaluate objective function we've chosen
         if (objective_function == "xent") {
           // gradients re-scaled by weights in Eval,
-          xent.Eval(frm_weights, nnet_out, nnet_tgt, &obj_diff); 
+          xent_hard.Eval(frm_weights, nnet_out_hard, nnet_tgt_hard, &obj_diff_hard);
+          xent_soft.Eval(frm_weights, nnet_out_soft, nnet_tgt_soft, &obj_diff_soft);
         } else if (objective_function == "mse") {
           // gradients re-scaled by weights in Eval,
-          mse.Eval(frm_weights, nnet_out, nnet_tgt, &obj_diff);
+          mse_hard.Eval(frm_weights, nnet_out_hard, nnet_tgt_hard, &obj_diff_hard);
+          mse_soft.Eval(frm_weights, nnet_out_soft, nnet_tgt_soft, &obj_diff_soft);
         } else if (0 == objective_function.compare(0,9,"multitask")) {
           // gradients re-scaled by weights in Eval,
-          multitask.Eval(frm_weights, nnet_out, nnet_tgt, &obj_diff);
+          multitask_hard.Eval(frm_weights, nnet_out_hard, nnet_tgt_hard, &obj_diff_hard);
+          multitask_soft.Eval(frm_weights, nnet_out_soft, nnet_tgt_soft, &obj_diff_soft);
         } else {
           KALDI_ERR << "Unknown objective function code : " << objective_function;
         }
@@ -279,7 +308,13 @@ int main(int argc, char *argv[]) {
         // backward pass
         if (!crossvalidate) {
           // backpropagate
-          nnet.Backpropagate(obj_diff, NULL);
+          obj_diff_hard.Scale(hard_scale);
+          if(hard_scale != 0.0) { //when hard targets are used too
+            obj_diff_soft.Scale(temperature);
+          }
+          obj_diff_soft.Scale(soft_scale);
+          obj_diff_soft.AddMat(1.0, obj_diff_hard);
+          nnet.Backpropagate(obj_diff_soft, NULL);
         }
 
         // 1st minibatch : show what happens in network 
@@ -330,11 +365,11 @@ int main(int argc, char *argv[]) {
               << "]";  
 
     if (objective_function == "xent") {
-      KALDI_LOG << xent.Report();
+      KALDI_LOG << xent_hard.Report();
     } else if (objective_function == "mse") {
-      KALDI_LOG << mse.Report();
+      KALDI_LOG << mse_hard.Report();
     } else if (0 == objective_function.compare(0,9,"multitask")) {
-      KALDI_LOG << multitask.Report();
+      KALDI_LOG << multitask_hard.Report();
     } else {
       KALDI_ERR << "Unknown objective function code : " << objective_function;
     }

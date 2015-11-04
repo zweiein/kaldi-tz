@@ -33,7 +33,7 @@ namespace nnet1 {
 class Softmax : public Component {
  public:
   Softmax(int32 dim_in, int32 dim_out) 
-    : Component(dim_in, dim_out)
+    : Component(dim_in, dim_out), temperature_(1.0)
   { }
   ~Softmax()
   { }
@@ -42,8 +42,16 @@ class Softmax : public Component {
   ComponentType GetType() const { return kSoftmax; }
 
   void PropagateFnc(const CuMatrixBase<BaseFloat> &in, CuMatrixBase<BaseFloat> *out) {
+    const CuMatrixBase<BaseFloat> *in_tmp = &in;
+    CuMatrix<BaseFloat> tmp;
+    if (temperature_ != 1.0) {
+      tmp.Resize(in.NumRows(), in.NumCols());
+      tmp.CopyFromMat(in);
+      tmp.Scale(1.0 / temperature_);
+      in_tmp = &tmp;
+    }
     // y = e^x_j/sum_j(e^x_j)
-    out->ApplySoftMaxPerRow(in);
+    out->ApplySoftMaxPerRow(*in_tmp);
   }
 
   void BackpropagateFnc(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &out,
@@ -55,6 +63,15 @@ class Softmax : public Component {
     // respect to activations of last layer neurons)
     in_diff->CopyFromMat(out_diff);
   }
+
+  void SetTemperature(BaseFloat t) {
+    KALDI_ASSERT(t > 0.0);
+    temperature_ = t;
+  }
+
+
+private:
+  BaseFloat temperature_;
 };
 
 

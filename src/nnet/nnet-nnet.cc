@@ -86,6 +86,38 @@ void Nnet::Propagate(const CuMatrixBase<BaseFloat> &in, CuMatrix<BaseFloat> *out
 }
 
 
+void Nnet::Propagate(const CuMatrixBase<BaseFloat> &in, BaseFloat temperature, CuMatrix<BaseFloat> *out_hard, CuMatrix<BaseFloat> *out_soft) {
+  KALDI_ASSERT(NULL != out_hard);
+  KALDI_ASSERT(NULL != out_soft);
+  if (NumComponents() == 0) {
+    (*out_hard) = in;
+    (*out_soft) = in; // copy
+    return;
+  }
+  
+  // we need at least L+1 input buffers
+  KALDI_ASSERT((int32)propagate_buf_.size() >= NumComponents()+1);
+  propagate_buf_[0].Resize(in.NumRows(), in.NumCols());
+  propagate_buf_[0].CopyFromMat(in);
+
+  int32 i=0;
+
+  for(i=0; i<(int32)(components_.size()-1); i++) {
+    components_[i]->Propagate(propagate_buf_[i], &propagate_buf_[i+1]);
+  }
+
+  components_[i]->Propagate(propagate_buf_[i], &propagate_buf_[i+1]);
+  (*out_hard) = propagate_buf_[components_.size()];
+
+  Softmax &soft = dynamic_cast<Softmax &>( *(components_[i]) );
+  soft.SetTemperature(temperature);
+  components_[i]->Propagate(propagate_buf_[i], &propagate_buf_[i+1]);
+  (*out_soft) = propagate_buf_[components_.size()];
+  soft.SetTemperature(1.0);
+  
+}
+
+
 void Nnet::Backpropagate(const CuMatrixBase<BaseFloat> &out_diff, CuMatrix<BaseFloat> *in_diff) {
 
   //////////////////////////////////////
@@ -111,7 +143,6 @@ void Nnet::Backpropagate(const CuMatrixBase<BaseFloat> &out_diff, CuMatrix<BaseF
   }
   // eventually export the derivative
   if (NULL != in_diff) (*in_diff) = backpropagate_buf_[0];
-
   //
   // End of Backpropagation
   //////////////////////////////////////
@@ -346,6 +377,16 @@ void Nnet::SetDropoutRetention(BaseFloat r)  {
       comp.SetDropoutRetention(r);
       KALDI_LOG << "Setting dropout-retention in component " << c 
                 << " from " << r_old << " to " << r;
+    }
+  }
+}
+
+
+void Nnet::SetTemperature(BaseFloat t)  {
+  for (int32 c=0; c < NumComponents(); c++) {
+    if (GetComponent(c).GetType() == Component::kSoftmax) {
+      Softmax& soft= dynamic_cast<Softmax&>(GetComponent(c));
+      soft.SetTemperature(t);
     }
   }
 }
