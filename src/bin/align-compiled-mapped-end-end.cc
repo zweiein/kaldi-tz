@@ -1,4 +1,4 @@
-// bin/align-compiled-mapped.cc
+// bin/align-compiled-mapped-end-end.cc
 
 // Copyright 2009-2012  Microsoft Corporation, Karel Vesely
 //                2014 Johns Hopkins University (Daniel Povey)
@@ -20,8 +20,8 @@
 
 #include "base/kaldi-common.h"
 #include "util/common-utils.h"
-#include "hmm/transition-model.h"
-#include "hmm/hmm-utils.h"
+//#include "hmm/transition-model.h"
+//#include "hmm/hmm-utils.h"
 #include "fstext/fstext-lib.h"
 #include "decoder/decoder-wrappers.h"
 #include "decoder/training-graph-compiler.h"
@@ -38,13 +38,7 @@ int main(int argc, char *argv[]) {
 
     const char *usage =
         "Generate alignments, reading log-likelihoods as matrices.\n"
-        " (model is needed only for the integer mappings in its transition-model)\n"
-        "Usage:   align-compiled-mapped [options] trans-model-in graphs-rspecifier feature-rspecifier alignments-wspecifier\n"
-        "e.g.: \n"
-        " nnet-align-compiled trans.mdl ark:graphs.fsts scp:train.scp ark:nnet.ali\n"
-        "or:\n"
-        " compile-train-graphs tree trans.mdl lex.fst ark:train.tra b, ark:- | \\\n"
-        "   nnet-align-compiled trans.mdl ark:- scp:loglikes.scp t, ark:nnet.ali\n";
+        "Usage:   align-compiled-mapped-end-end [options] graphs-rspecifier feature-rspecifier alignments-wspecifier\n";
 
     ParseOptions po(usage);
     AlignConfig align_config;
@@ -63,19 +57,19 @@ int main(int argc, char *argv[]) {
                 "Scale of self-loop versus non-self-loop log probs [relative to acoustics]");
     po.Read(argc, argv);
 
-    if (po.NumArgs() < 4 || po.NumArgs() > 5) {
+    if (po.NumArgs() < 3 || po.NumArgs() > 4) {
       po.PrintUsage();
       exit(1);
     }
 
-    std::string model_in_filename = po.GetArg(1);
-    std::string fst_rspecifier = po.GetArg(2);
-    std::string feature_rspecifier = po.GetArg(3);
-    std::string alignment_wspecifier = po.GetArg(4);
-    std::string scores_wspecifier = po.GetOptArg(5);
+    //std::string model_in_filename = po.GetArg(1);
+    std::string fst_rspecifier = po.GetArg(1);
+    std::string feature_rspecifier = po.GetArg(2);
+    std::string alignment_wspecifier = po.GetArg(3);
+    std::string scores_wspecifier = po.GetOptArg(4);
 
-    TransitionModel trans_model;
-    ReadKaldiObject(model_in_filename, &trans_model);
+    //TransitionModel trans_model;
+    //ReadKaldiObject(model_in_filename, &trans_model);
 
     SequentialBaseFloatMatrixReader loglikes_reader(feature_rspecifier);
     RandomAccessTableReader<fst::VectorFstHolder> fst_reader(fst_rspecifier);
@@ -111,13 +105,13 @@ int main(int argc, char *argv[]) {
       }
 
       {  // Add transition-probs to the FST.
-        std::vector<int32> disambig_syms;  // empty.
-        AddTransitionProbs(trans_model, disambig_syms,
-                           transition_scale, self_loop_scale,
-                           &decode_fst);
+        //std::vector<int32> disambig_syms;  // empty.
+        //AddTransitionProbs(trans_model, disambig_syms,
+        //                   transition_scale, self_loop_scale,
+        //                   &decode_fst);
       }
 
-      DecodableMatrixScaledMapped decodable(trans_model, loglikes, acoustic_scale);
+      DecodableMatrixScaledEndEnd decodable(loglikes, acoustic_scale);
 
       AlignUtteranceWrapper(align_config, utt,
                             acoustic_scale, &decode_fst, &decodable,

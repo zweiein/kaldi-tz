@@ -1,7 +1,7 @@
-// bin/compile-train-graphs.cc
+// bin/compile-train-graphs-end-end.cc
 
 // Copyright 2009-2012  Microsoft Corporation
-//           2012-2015  Johns Hopkins University (Author: Daniel Povey)
+//           2012-2013  Johns Hopkins University (Author: Daniel Povey)
 
 // See ../../COPYING for clarification regarding multiple authors
 //
@@ -20,8 +20,8 @@
 
 #include "base/kaldi-common.h"
 #include "util/common-utils.h"
-#include "tree/context-dep.h"
-#include "hmm/transition-model.h"
+//#include "tree/context-dep.h"
+//#include "hmm/transition-model.h"
 #include "fstext/fstext-lib.h"
 #include "decoder/training-graph-compiler.h"
 
@@ -37,19 +37,20 @@ int main(int argc, char *argv[]) {
     const char *usage =
         "Creates training graphs (without transition-probabilities, by default)\n"
         "\n"
-        "Usage:   compile-train-graphs [options] <tree-in> <model-in> <lexicon-fst-in> <transcriptions-rspecifier> <graphs-wspecifier>\n"
+        "Usage:   compile-train-graphs-end-end [options] <token-fst-in> <lexicon-fst-in> <transcriptions-rspecifier> <graphs-wspecifier>\n"
         "e.g.: \n"
-        " compile-train-graphs tree 1.mdl lex.fst ark:train.tra ark:graphs.fsts\n";
+        " compile-train-graphs-end-end token.fst lex.fst ark:train.tra ark:graphs.fsts\n";
     ParseOptions po(usage);
 
-    TrainingGraphCompilerOptions gopts;
+    TrainingGraphCompilerOptionsEndEnd gopts;
     int32 batch_size = 250;
-    gopts.transition_scale = 0.0;  // Change the default to 0.0 since we will generally add the
+	
+	gopts.transition_scale = 0.0;  // Change the default to 0.0 since we will generally add the
     // transition probs in the alignment phase (since they change eacm time)
     gopts.self_loop_scale = 0.0;  // Ditto for self-loop probs.
     std::string disambig_rxfilename;
     gopts.Register(&po);
-
+    
     po.Register("batch-size", &batch_size,
                 "Number of FSTs to compile at a time (more -> faster but uses "
                 "more memory.  E.g. 500");
@@ -58,24 +59,32 @@ int main(int argc, char *argv[]) {
     
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 5) {
+    if (po.NumArgs() != 4) {
       po.PrintUsage();
       exit(1);
     }
 
-    std::string tree_rxfilename = po.GetArg(1);
-    std::string model_rxfilename = po.GetArg(2);
-    std::string lex_rxfilename = po.GetArg(3);
-    std::string transcript_rspecifier = po.GetArg(4);
-    std::string fsts_wspecifier = po.GetArg(5);
+    //std::string tree_rxfilename = po.GetArg(1);
+    //std::string model_rxfilename = po.GetArg(2);
+    std::string token_rxfilename = po.GetArg(1);
+    std::string lex_rxfilename = po.GetArg(2);
+    std::string transcript_rspecifier = po.GetArg(3);
+    std::string fsts_wspecifier = po.GetArg(4);
 
-    ContextDependency ctx_dep;  // the tree.
-    ReadKaldiObject(tree_rxfilename, &ctx_dep);
+    //ContextDependency ctx_dep;  // the tree.
+    //ReadKaldiObject(tree_rxfilename, &ctx_dep);
 
-    TransitionModel trans_model;
-    ReadKaldiObject(model_rxfilename, &trans_model);
+    //TransitionModel trans_model;
+    //{
+    //  bool binary;
+    //  Input ki(model_rxfilename, &binary);
+    //  trans_model.Read(ki.Stream(), binary);
+    //  // AmDiagGmm am_gmm;
+    //  // am_gmm.Read(ki.Stream(), binary);
+    //}
 
     // need VectorFst because we will change it by adding subseq symbol.
+	VectorFst<StdArc> *token_fst = fst::ReadFstKaldi(token_rxfilename);
     VectorFst<StdArc> *lex_fst = fst::ReadFstKaldi(lex_rxfilename);
 
     std::vector<int32> disambig_syms;
@@ -84,8 +93,9 @@ int main(int argc, char *argv[]) {
         KALDI_ERR << "fstcomposecontext: Could not read disambiguation symbols from "
                   << disambig_rxfilename;
     
-    TrainingGraphCompiler gc(trans_model, ctx_dep, lex_fst, disambig_syms, gopts);
+    TrainingGraphCompilerEndEnd gc(token_fst, lex_fst, disambig_syms, gopts);
 
+	token_fst = NULL;
     lex_fst = NULL;  // we gave ownership to gc.
 
     SequentialInt32VectorReader transcript_reader(transcript_rspecifier);

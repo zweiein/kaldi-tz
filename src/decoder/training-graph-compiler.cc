@@ -21,6 +21,143 @@
 namespace kaldi {
 
 
+
+TrainingGraphCompilerEndEnd::TrainingGraphCompilerEndEnd(fst::VectorFst<fst::StdArc> *token_fst,
+												fst::VectorFst<fst::StdArc> *lex_fst,
+                                             const std::vector<int32> &disambig_syms,
+                                             const TrainingGraphCompilerOptionsEndEnd &opts):
+    token_fst_(token_fst),lex_fst_(lex_fst),
+    disambig_syms_(disambig_syms), opts_(opts) {
+    using namespace fst;
+  /* const std::vector<int32> &phone_syms = trans_model_.GetPhones();  // needed to create context fst.
+
+  KALDI_ASSERT(!phone_syms.empty());
+  KALDI_ASSERT(IsSortedAndUniq(phone_syms));
+  SortAndUniq(&disambig_syms_);
+  for (int32 i = 0; i < disambig_syms_.size(); i++)
+    if (std::binary_search(phone_syms.begin(), phone_syms.end(),
+                           disambig_syms_[i]))
+      KALDI_ERR << "Disambiguation symbol " << disambig_syms_[i]
+                << " is also a phone.";
+  
+  int32 subseq_symbol = 1 + phone_syms.back();
+  if (!disambig_syms_.empty() && subseq_symbol <= disambig_syms_.back())
+    subseq_symbol = 1 + disambig_syms_.back();
+
+  {
+    //int32 N = ctx_dep.ContextWidth(),
+    //    P = ctx_dep.CentralPosition();
+    //if (P != N-1)
+    //  AddSubsequentialLoop(subseq_symbol, lex_fst_);  // This is needed for
+    // // systems with right-context or we will not successfully compose
+	// // with C.
+  }*/
+
+  {  // make sure lexicon is olabel sorted.
+    fst::OLabelCompare<fst::StdArc> olabel_comp1;
+    fst::ArcSort(token_fst_, olabel_comp1);
+    fst::OLabelCompare<fst::StdArc> olabel_comp;
+    fst::ArcSort(lex_fst_, olabel_comp);
+  }
+}
+
+bool TrainingGraphCompilerEndEnd::CompileGraphFromText(
+    const std::vector<int32> &transcript,
+    fst::VectorFst<fst::StdArc> *out_fst) {
+  using namespace fst;
+  VectorFst<StdArc> word_fst;
+  MakeLinearAcceptor(transcript, &word_fst);
+  return CompileGraph(word_fst, out_fst);
+}
+
+
+bool TrainingGraphCompilerEndEnd::CompileGraph(const fst::VectorFst<fst::StdArc> &word_fst,
+                                         fst::VectorFst<fst::StdArc> *out_fst) {
+  using namespace fst;
+  KALDI_ASSERT(token_fst_!=NULL);
+  KALDI_ASSERT(lex_fst_ !=NULL);
+  KALDI_ASSERT(out_fst != NULL);
+
+  VectorFst<StdArc> phone2word_fst;
+  VectorFst<StdArc> &token2word_fst = *out_fst;
+  // TableCompose more efficient than compose.
+  TableCompose(*lex_fst_, word_fst, &phone2word_fst, &lex_cache_);
+  KALDI_ASSERT(phone2word_fst.Start() != kNoStateId);
+  DeterminizeStarInLog(&phone2word_fst);
+  MinimizeEncoded(&phone2word_fst);
+  TableCompose(*token_fst_, phone2word_fst, &token2word_fst, &token_cache_);
+  KALDI_ASSERT(token2word_fst.Start() != kNoStateId);
+
+
+  // Epsilon-removal and determinization combined. This will fail if not determinizable.
+  //DeterminizeStarInLog(&token2word_fst);
+
+  // Encoded minimization.
+  //MinimizeEncoded(&token2word_fst);
+
+  return true;
+}
+
+
+
+bool TrainingGraphCompilerEndEnd::CompileGraphsFromText(
+    const std::vector<std::vector<int32> > &transcripts,
+    std::vector<fst::VectorFst<fst::StdArc>*> *out_fsts) {
+  using namespace fst;
+  std::vector<const VectorFst<StdArc>* > word_fsts(transcripts.size());
+  for (size_t i = 0; i < transcripts.size(); i++) {
+    VectorFst<StdArc> *word_fst = new VectorFst<StdArc>();
+    MakeLinearAcceptor(transcripts[i], word_fst);
+    word_fsts[i] = word_fst;
+  }    
+  bool ans = CompileGraphs(word_fsts, out_fsts);
+  for (size_t i = 0; i < transcripts.size(); i++)
+    delete word_fsts[i];
+  return ans;
+}
+
+
+bool TrainingGraphCompilerEndEnd::CompileGraphs(
+    const std::vector<const fst::VectorFst<fst::StdArc>* > &word_fsts,
+    std::vector<fst::VectorFst<fst::StdArc>* > *out_fsts) {
+
+  using namespace fst;
+  KALDI_ASSERT(token_fst_ !=NULL);
+  KALDI_ASSERT(lex_fst_ !=NULL);
+  KALDI_ASSERT(out_fsts != NULL && out_fsts->empty());
+  out_fsts->resize(word_fsts.size(), NULL);
+  if (word_fsts.empty()) return true;
+
+
+  for (size_t i = 0; i < word_fsts.size(); i++) {
+    VectorFst<StdArc> phone2word_fst;
+    // TableCompose more efficient than compose.
+    TableCompose(*lex_fst_, *(word_fsts[i]), &phone2word_fst, &lex_cache_);
+    KALDI_ASSERT(phone2word_fst.Start() != kNoStateId && "Perhaps you have words missing in your lexicon?");
+	DeterminizeStarInLog(&phone2word_fst);
+	MinimizeEncoded(&phone2word_fst);
+	VectorFst<StdArc> token2word_fst;
+	TableCompose(*token_fst_, phone2word_fst, &token2word_fst, &token_cache_);
+	KALDI_ASSERT(token2word_fst.Start() != kNoStateId);
+	
+	// Epsilon-removal and determinization combined. This will fail if not determinizable.
+	//DeterminizeStarInLog(&token2word_fst);
+	
+	// Encoded minimization.
+	//MinimizeEncoded(&token2word_fst);
+
+	(*out_fsts)[i] = token2word_fst.Copy();
+
+  }
+
+
+  return true;
+}
+
+
+
+
+
 TrainingGraphCompiler::TrainingGraphCompiler(const TransitionModel &trans_model,
                                              const ContextDependency &ctx_dep,  // Does not maintain reference to this.
                                              fst::VectorFst<fst::StdArc> *lex_fst,

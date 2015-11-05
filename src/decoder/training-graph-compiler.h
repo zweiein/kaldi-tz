@@ -105,6 +105,85 @@ class TrainingGraphCompiler {
 
 
 
+struct TrainingGraphCompilerOptionsEndEnd {
+
+  BaseFloat transition_scale;
+  BaseFloat self_loop_scale;
+  bool rm_eps;
+  bool reorder;  // (Dan-style graphs)
+
+  explicit TrainingGraphCompilerOptionsEndEnd(BaseFloat transition_scale = 1.0,
+                                        BaseFloat self_loop_scale = 1.0,
+                                        bool b = true) :
+      transition_scale(transition_scale),
+      self_loop_scale(self_loop_scale),
+      rm_eps(false),
+      reorder(b) { }
+
+  void Register(OptionsItf *po) {
+    po->Register("transition-scale", &transition_scale, "Scale of transition "
+                 "probabilities (excluding self-loops)");
+    po->Register("self-loop-scale", &self_loop_scale, "Scale of self-loop vs. "
+                 "non-self-loop probability mass ");
+    po->Register("reorder", &reorder, "Reorder transition ids for greater decoding efficiency.");
+    po->Register("rm-eps", &rm_eps,  "Remove [most] epsilons before minimization (only applicable "
+                 "if disambig symbols present)");
+  }
+};
+
+
+
+class TrainingGraphCompilerEndEnd {
+ public:
+  TrainingGraphCompilerEndEnd(fst::VectorFst<fst::StdArc> *token_fst,
+  						fst::VectorFst<fst::StdArc> *lex_fst,  // Takes ownership of this object.
+                        // It should not contain disambiguation symbols or subsequential symbol,
+                        // but it should contain optional silence.
+                        const std::vector<int32> &disambig_syms, // disambig symbols in phone symbol table.
+                        const TrainingGraphCompilerOptionsEndEnd &opts);
+
+
+  /// CompileGraph compiles a single training graph its input is a
+  // weighted acceptor (G) at the word level, its output is HCLG.
+  // Note: G could actually be an acceptor, it would also work.
+  // This function is not const for technical reasons involving the cache.
+  // if not for "table_compose" we could make it const.
+  bool CompileGraph(const fst::VectorFst<fst::StdArc> &word_grammar,
+                    fst::VectorFst<fst::StdArc> *out_fst);
+  
+  // CompileGraphs allows you to compile a number of graphs at the same
+  // time.  This consumes more memory but is faster.
+  bool CompileGraphs(
+      const std::vector<const fst::VectorFst<fst::StdArc> *> &word_fsts,
+      std::vector<fst::VectorFst<fst::StdArc> *> *out_fsts);
+
+  // This version creates an FST from the text and calls CompileGraph.
+  bool CompileGraphFromText(const std::vector<int32> &transcript,
+                            fst::VectorFst<fst::StdArc> *out_fst);
+
+  // This function creates FSTs from the text and calls CompileGraphs.
+  bool CompileGraphsFromText(
+      const std::vector<std::vector<int32> >  &word_grammar,
+      std::vector<fst::VectorFst<fst::StdArc> *> *out_fsts);
+  
+  
+  ~TrainingGraphCompilerEndEnd() { delete lex_fst_; delete token_fst_;}
+ private:
+ 	fst::VectorFst<fst::StdArc> *token_fst_;
+  fst::VectorFst<fst::StdArc> *lex_fst_; // lexicon FST (an input; we take
+  // ownership as we need to modify it).
+  std::vector<int32> disambig_syms_; // disambig symbols (if any) in the phone
+  // symbol table.
+  fst::TableComposeCache<fst::Fst<fst::StdArc> > token_cache_;
+  fst::TableComposeCache<fst::Fst<fst::StdArc> > lex_cache_;  // stores matcher..
+  // this is one of Dan's extensions.
+
+  TrainingGraphCompilerOptionsEndEnd opts_;
+};
+
+
+
+
 }  // end namespace kaldi.
 
 #endif
