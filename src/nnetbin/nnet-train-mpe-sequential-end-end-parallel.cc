@@ -1,4 +1,4 @@
-// nnetbin/nnet-train-mpe-sequential.cc
+//  nnetbin/nnet-train-mpe-sequential.cc
 
 // Copyright 2011-2013  Brno University of Technology (author: Karel Vesely);  Arnab Ghoshal
 
@@ -41,8 +41,7 @@
 namespace kaldi {
 namespace nnet1 {
 
-void LatticeAcousticRescore(const Matrix<BaseFloat> &log_like,
-                            const TransitionModel &trans_model,
+void LatticeAcousticRescoreEndEnd(const Matrix<BaseFloat> &log_like,
                             const std::vector<int32> &state_times,
                             Lattice *lat) {
   kaldi::uint64 props = lat->Properties(fst::kFstProperties, false);
@@ -66,12 +65,17 @@ void LatticeAcousticRescore(const Matrix<BaseFloat> &log_like,
       for (fst::MutableArcIterator<Lattice> aiter(lat, state); !aiter.Done();
            aiter.Next()) {
         LatticeArc arc = aiter.Value();
-        int32 trans_id = arc.ilabel;
+		int32 label_id = arc.ilabel-1;  //In this end-to-end system, there is shift 1 between token id and unit id
+        if (label_id != 0) {  // Non-epsilon input label on arc
+          arc.weight.SetValue2(-log_like(t, label_id) + arc.weight.Value2());
+          aiter.SetValue(arc);
+        }
+        /*int32 trans_id = arc.ilabel;
         if (trans_id != 0) {  // Non-epsilon input label on arc
           int32 pdf_id = trans_model.TransitionIdToPdf(trans_id);
           arc.weight.SetValue2(-log_like(t, pdf_id) + arc.weight.Value2());
           aiter.SetValue(arc);
-        }
+        }*/
       }
     }
   }
@@ -129,6 +133,10 @@ int main(int argc, char *argv[]) {
                 "behavior which will tend to reduce insertions.");
     kaldi::int32 max_frames = 6000; // Allow segments maximum of one minute by default
     po.Register("max-frames",&max_frames, "Maximum number of frames a segment can have to be processed");
+
+    int32 num_sequence = 5;
+    po.Register("num-sequence", &num_sequence, "Number of sequences processed in parallel");
+    
     bool do_smbr = false;
     po.Register("do-smbr", &do_smbr, "Use state-level accuracies instead of "
                 "phone accuracies.");
@@ -138,19 +146,19 @@ int main(int argc, char *argv[]) {
      
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 6) {
+    if (po.NumArgs() != 5) {
       po.PrintUsage();
       exit(1);
     }
 
     std::string model_filename = po.GetArg(1),
-        transition_model_filename = po.GetArg(2),
-        feature_rspecifier = po.GetArg(3),
-        den_lat_rspecifier = po.GetArg(4),
-        ref_ali_rspecifier = po.GetArg(5);
+    //    transition_model_filename = po.GetArg(2),
+        feature_rspecifier = po.GetArg(2),
+        den_lat_rspecifier = po.GetArg(3),
+        ref_ali_rspecifier = po.GetArg(4);
 
     std::string target_model_filename;
-    target_model_filename = po.GetArg(6);
+    target_model_filename = po.GetArg(5);
 
     std::vector<int32> silence_phones;
     if (!kaldi::SplitStringToIntegers(silence_phones_str, ":", false,
@@ -186,15 +194,21 @@ int main(int argc, char *argv[]) {
     PdfPrior log_prior(prior_opts);
 
     // Read transition model
-    TransitionModel trans_model;
-    ReadKaldiObject(transition_model_filename, &trans_model);
+    //TransitionModel trans_model;
+    //ReadKaldiObject(transition_model_filename, &trans_model);
 
     SequentialBaseFloatMatrixReader feature_reader(feature_rspecifier);
     RandomAccessLatticeReader den_lat_reader(den_lat_rspecifier);
     RandomAccessInt32VectorReader ref_ali_reader(ref_ali_rspecifier);
 
-    CuMatrix<BaseFloat> feats, feats_transf, nnet_out, nnet_diff;
+    CuMatrix<BaseFloat> feats_transf, nnet_out, nnet_diff_all;
     Matrix<BaseFloat> nnet_out_h;
+         
+    std::vector< string > utts(num_sequence);
+    std::vector< Matrix<BaseFloat> > mats(num_sequence);  // Feature matrix of every utterance
+    std::vector< std::vector<int32> > ref_alis(num_sequence);
+    std::vector< Lattice > den_lats(num_sequence);
+    std::vector< vector<int32> > state_times_s(num_sequence);
 
     Timer time;
     double time_now = 0;
@@ -205,8 +219,12 @@ int main(int argc, char *argv[]) {
 
     kaldi::int64 total_frames = 0;
     double total_frame_acc = 0.0, utt_frame_acc;
-
     // do per-utterance processing
+ while(1) {  
+     
+    std::vector<int> frame_num_utt;
+    int32 sequence_index = 0, max_frame_num = 0;
+    
     for (; !feature_reader.Done(); feature_reader.Next()) {
       std::string utt = feature_reader.Key();
       if (!den_lat_reader.HasKey(utt)) {
@@ -264,18 +282,48 @@ int main(int argc, char *argv[]) {
         continue;
       }
 
+      utts[sequence_index] = utt;
+      mats[sequence_index] = mat;
+      ref_alis[sequence_index] = ref_ali;
+      den_lats[sequence_index] = den_lat;
+      state_times_s[sequence_index] = state_times;
+      frame_num_utt.push_back(mat.NumRows());
+
+      if (max_frame_num < mat.NumRows()) max_frame_num = mat.NumRows();
+      sequence_index++;
+
+      if (frame_num_utt.size() == num_sequence ) {
+        feature_reader.Next(); break;
+      }
+
+      
+    }  
+
+    int32 cur_sequence_num = frame_num_utt.size();
+    int32 feat_dim = nnet.InputDim();
+      
+    // Create the final feature matrix. Every utterance is padded to the max length within this group of utterances
+    Matrix<BaseFloat> feat_mat_host(cur_sequence_num * max_frame_num, feat_dim, kSetZero);
+    for (int s = 0; s < cur_sequence_num; s++) {
+      Matrix<BaseFloat> mat_tmp = mats[s];
+      for (int r = 0; r < frame_num_utt[s]; r++) {
+        feat_mat_host.Row(r*cur_sequence_num + s).CopyFromVec(mat_tmp.Row(r));
+      }
+    }
+
       // get actual dims for this utt and nnet
-      int32 num_frames = mat.NumRows(),
-          num_fea = mat.NumCols(),
+      int32 num_frames = feat_mat_host.NumRows(),
+          //num_fea = feat_dim,
           num_pdfs = nnet.OutputDim();
 
       // 3) propagate the feature to get the log-posteriors (nnet w/o sofrmax)
       // push features to GPU
-      feats.Resize(num_frames, num_fea, kUndefined);
-      feats.CopyFromMat(mat);
+      //feats.Resize(num_frames, num_fea, kUndefined);
+      //feats.CopyFromMat(mat);
       // possibly apply transform
-      nnet_transf.Feedforward(feats, &feats_transf);
+      nnet_transf.Feedforward(CuMatrix<BaseFloat>(feat_mat_host), &feats_transf);
       // propagate through the nnet (assuming w/o softmax)
+      nnet.SetSeqLengths(frame_num_utt);
       nnet.Propagate(feats_transf, &nnet_out);
       // subtract the log_prior
       if (prior_opts.class_frame_counts != "") {
@@ -283,50 +331,64 @@ int main(int argc, char *argv[]) {
       }
       // transfer it back to the host
       nnet_out_h.Resize(num_frames, num_pdfs, kUndefined);
+      nnet_diff_all.Resize(num_frames, num_pdfs, kSetZero);
       nnet_out.CopyToMat(&nnet_out_h);
       // release the buffers we don't need anymore
-      feats.Resize(0,0);
+      //feats.Resize(0,0);
       feats_transf.Resize(0,0);
       nnet_out.Resize(0,0);
-
+    for(int i = 0; i < cur_sequence_num; i++){
       // 4) rescore the latice
-      LatticeAcousticRescore(nnet_out_h, trans_model, state_times, &den_lat);
+      Matrix<BaseFloat> nnet_out_utt;
+      nnet_out_utt.Resize(frame_num_utt[i], num_pdfs, kSetZero);
+      for(int j = 0; j < frame_num_utt[i]; j++){
+        nnet_out_utt.Row(j).CopyFromVec(nnet_out_h.Row(i+ j*cur_sequence_num));
+      }
+      LatticeAcousticRescoreEndEnd(nnet_out_utt, state_times_s[i], &den_lats[i]);
       if (acoustic_scale != 1.0 || lm_scale != 1.0)
-        fst::ScaleLattice(fst::LatticeScale(lm_scale, acoustic_scale), &den_lat);
+        fst::ScaleLattice(fst::LatticeScale(lm_scale, acoustic_scale), &den_lats[i]);
 
       kaldi::Posterior post;
+      CuMatrix<BaseFloat> nnet_diff;
 
       if (do_smbr) {  // use state-level accuracies, i.e. sMBR estimation
-        utt_frame_acc = LatticeForwardBackwardMpeVariants(
-            trans_model, silence_phones, den_lat, ref_ali, "smbr",
+        utt_frame_acc = LatticeForwardBackwardMpeVariantsEndEnd(
+            silence_phones, den_lats[i], ref_alis[i], "smbr",
             one_silence_class, &post);
       } else {  // use phone-level accuracies, i.e. MPFE (minimum phone frame error)
-        utt_frame_acc = LatticeForwardBackwardMpeVariants(
-            trans_model, silence_phones, den_lat, ref_ali, "mpfe",
+        utt_frame_acc = LatticeForwardBackwardMpeVariantsEndEnd(
+            silence_phones, den_lats[i], ref_alis[i], "mpfe",
             one_silence_class, &post);
       }
 
       // 6) convert the Posterior to a matrix,
-      PosteriorToMatrixMapped(post, trans_model, &nnet_diff);
+      PosteriorToMatrixMappedEndEnd(post, num_pdfs, &nnet_diff);
       nnet_diff.Scale(-1.0); // need to flip the sign of derivative,
+      for(int k = 0; k < frame_num_utt[i]; k++){
+        nnet_diff_all.Row(i+ k*cur_sequence_num).CopyFromVec(nnet_diff.Row(k));
+      }
+      
 
       KALDI_VLOG(1) << "Lattice #" << num_done + 1 << " processed"
-                    << " (" << utt << "): found " << den_lat.NumStates()
-                    << " states and " << fst::NumArcs(den_lat) << " arcs.";
+                    << " (" << utts[i] << "): found " << den_lats[i].NumStates()
+                    << " states and " << fst::NumArcs(den_lats[i]) << " arcs.";
 
-      KALDI_VLOG(1) << "Utterance " << utt << ": Average frame accuracy = "
-                    << (utt_frame_acc/num_frames) << " over " << num_frames
+      KALDI_VLOG(1) << "Utterance " << utts[i] << ": Average frame accuracy = "
+                    << (utt_frame_acc/frame_num_utt[i]) << " over " << frame_num_utt[i]
                     << " frames,"
                     << " diff-range(" << nnet_diff.Min() << "," << nnet_diff.Max() << ")";
-
-      // 7) backpropagate through the nnet,
-      nnet.Backpropagate(nnet_diff, NULL);
-      nnet_diff.Resize(0,0); // release GPU memory,
-
+      
       // increase time counter
       total_frame_acc += utt_frame_acc;
-      total_frames += num_frames;
+      total_frames += frame_num_utt[i];
       num_done++;
+      
+    }
+    
+      // 7) backpropagate through the nnet,
+      nnet.Backpropagate(nnet_diff_all, NULL);
+      nnet_diff_all.Resize(0,0); // release GPU memory,
+
 
       if (num_done % 100 == 0) {
         time_now = time.Elapsed();
@@ -338,6 +400,11 @@ int main(int argc, char *argv[]) {
         CuDevice::Instantiate().CheckGpuHealth();
 #endif
       }
+    
+
+
+    if (feature_reader.Done()) break; // end loop of while(1)
+
     }
 
     // add the softmax layer back before writing

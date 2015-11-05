@@ -202,6 +202,33 @@ void PosteriorToMatrixMapped(const Posterior &post, const TransitionModel &model
 }
 
 
+
+template <typename Real>
+void PosteriorToMatrixMappedEndEnd(const Posterior &post, int32 num_pdfs, CuMatrix<Real> *mat) {
+  // Make a host-matrix,
+  int32 num_rows = post.size(),
+        num_cols = num_pdfs;
+        //num_cols = model.NumPdfs();
+  Matrix<Real> m(num_rows, num_cols, kSetZero); // zero-filled
+  // Fill from Posterior,
+  for (int32 t = 0; t < post.size(); t++) {
+    for (int32 i = 0; i < post[t].size(); i++) {
+      //int32 col = model.TransitionIdToPdf(post[t][i].first);
+	  int32 col = post[t][i].first - 1; //In this end-to-end system, there is shift 1 between token id and unit id
+      if (col >= num_cols) {
+        KALDI_ERR << "Out-of-bound Posterior element with index " << col 
+                  << ", higher than number of columns " << num_cols;
+      }
+      m(t, col) += post[t][i].second; // sum,
+    }
+  }
+  // Copy to output GPU matrix,
+  (*mat) = m; 
+}
+
+
+
+
 } // namespace nnet1
 } // namespace kaldi
 

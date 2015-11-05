@@ -1,4 +1,4 @@
-// nnetbin/nnet-train-mpe-sequential.cc
+//  nnetbin/nnet-train-mpe-sequential.cc
 
 // Copyright 2011-2013  Brno University of Technology (author: Karel Vesely);  Arnab Ghoshal
 
@@ -41,8 +41,7 @@
 namespace kaldi {
 namespace nnet1 {
 
-void LatticeAcousticRescore(const Matrix<BaseFloat> &log_like,
-                            const TransitionModel &trans_model,
+void LatticeAcousticRescoreEndEnd(const Matrix<BaseFloat> &log_like,
                             const std::vector<int32> &state_times,
                             Lattice *lat) {
   kaldi::uint64 props = lat->Properties(fst::kFstProperties, false);
@@ -66,12 +65,17 @@ void LatticeAcousticRescore(const Matrix<BaseFloat> &log_like,
       for (fst::MutableArcIterator<Lattice> aiter(lat, state); !aiter.Done();
            aiter.Next()) {
         LatticeArc arc = aiter.Value();
-        int32 trans_id = arc.ilabel;
+		int32 label_id = arc.ilabel-1;  //In this end-to-end system, there is shift 1 between token id and unit id
+        if (label_id != 0) {  // Non-epsilon input label on arc
+          arc.weight.SetValue2(-log_like(t, label_id) + arc.weight.Value2());
+          aiter.SetValue(arc);
+        }
+        /*int32 trans_id = arc.ilabel;
         if (trans_id != 0) {  // Non-epsilon input label on arc
           int32 pdf_id = trans_model.TransitionIdToPdf(trans_id);
           arc.weight.SetValue2(-log_like(t, pdf_id) + arc.weight.Value2());
           aiter.SetValue(arc);
-        }
+        }*/
       }
     }
   }
@@ -138,19 +142,19 @@ int main(int argc, char *argv[]) {
      
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 6) {
+    if (po.NumArgs() != 5) {
       po.PrintUsage();
       exit(1);
     }
 
     std::string model_filename = po.GetArg(1),
-        transition_model_filename = po.GetArg(2),
-        feature_rspecifier = po.GetArg(3),
-        den_lat_rspecifier = po.GetArg(4),
-        ref_ali_rspecifier = po.GetArg(5);
+    //    transition_model_filename = po.GetArg(2),
+        feature_rspecifier = po.GetArg(2),
+        den_lat_rspecifier = po.GetArg(3),
+        ref_ali_rspecifier = po.GetArg(4);
 
     std::string target_model_filename;
-    target_model_filename = po.GetArg(6);
+    target_model_filename = po.GetArg(5);
 
     std::vector<int32> silence_phones;
     if (!kaldi::SplitStringToIntegers(silence_phones_str, ":", false,
@@ -186,8 +190,8 @@ int main(int argc, char *argv[]) {
     PdfPrior log_prior(prior_opts);
 
     // Read transition model
-    TransitionModel trans_model;
-    ReadKaldiObject(transition_model_filename, &trans_model);
+    //TransitionModel trans_model;
+    //ReadKaldiObject(transition_model_filename, &trans_model);
 
     SequentialBaseFloatMatrixReader feature_reader(feature_rspecifier);
     RandomAccessLatticeReader den_lat_reader(den_lat_rspecifier);
@@ -290,24 +294,24 @@ int main(int argc, char *argv[]) {
       nnet_out.Resize(0,0);
 
       // 4) rescore the latice
-      LatticeAcousticRescore(nnet_out_h, trans_model, state_times, &den_lat);
+      LatticeAcousticRescoreEndEnd(nnet_out_h, state_times, &den_lat);
       if (acoustic_scale != 1.0 || lm_scale != 1.0)
         fst::ScaleLattice(fst::LatticeScale(lm_scale, acoustic_scale), &den_lat);
 
       kaldi::Posterior post;
 
       if (do_smbr) {  // use state-level accuracies, i.e. sMBR estimation
-        utt_frame_acc = LatticeForwardBackwardMpeVariants(
-            trans_model, silence_phones, den_lat, ref_ali, "smbr",
+        utt_frame_acc = LatticeForwardBackwardMpeVariantsEndEnd(
+            silence_phones, den_lat, ref_ali, "smbr",
             one_silence_class, &post);
       } else {  // use phone-level accuracies, i.e. MPFE (minimum phone frame error)
-        utt_frame_acc = LatticeForwardBackwardMpeVariants(
-            trans_model, silence_phones, den_lat, ref_ali, "mpfe",
+        utt_frame_acc = LatticeForwardBackwardMpeVariantsEndEnd(
+            silence_phones, den_lat, ref_ali, "mpfe",
             one_silence_class, &post);
       }
 
       // 6) convert the Posterior to a matrix,
-      PosteriorToMatrixMapped(post, trans_model, &nnet_diff);
+      PosteriorToMatrixMappedEndEnd(post, num_pdfs, &nnet_diff);
       nnet_diff.Scale(-1.0); // need to flip the sign of derivative,
 
       KALDI_VLOG(1) << "Lattice #" << num_done + 1 << " processed"

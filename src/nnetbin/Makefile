@@ -9,7 +9,7 @@ LDLIBS += $(CUDA_LDLIBS)
 BINFILES = nnet-train-frmshuff nnet-train-frmshuff-dual-targets nnet-train-frmshuff-extra-input-alone nnet-train-frmshuff-extra-inputs-same \
         nnet-train-perutt \
         nnet-train-mmi-sequential \
-        nnet-train-mpe-sequential \
+        nnet-train-mpe-sequential nnet-train-mpe-sequential-end-end nnet-train-mpe-sequential-end-end-parallel \
         nnet-train-lstm-streams nnet-train-blstm-streams nnet-train-lstm-streams-dual-targets \
         rbm-train-cd1-frmshuff rbm-convert-to-nnet \
         nnet-forward nnet-copy nnet-info nnet-concat nnet-forward-extra-input-alone nnet-forward-extra-inputs-same \
