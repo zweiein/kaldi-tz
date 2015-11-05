@@ -130,6 +130,8 @@ class CuVectorBase {
   Real Sum() const;
   void SetRandn();
   
+  void InitRandUniform(Real range); // for lstm from eesen
+  
   CuSubVector<Real> Range(const MatrixIndexT o, const MatrixIndexT l) {
     return CuSubVector<Real>(*this, o, l);
   }

@@ -260,6 +260,20 @@ void CuVectorBase<Real>::SetRandn() {
 
 
 template<typename Real>
+void CuVectorBase<Real>::InitRandUniform(Real range) {
+  if (dim_ == 0) return;
+//  this->SetRandUniform();   // randomly between [0, 1]
+//  //  this->Scale(2 * range);   // then between [0, 2*range]
+//  //  this->Add(-range);        // between [-range, range]
+  Vector<BaseFloat> tmp(dim_);
+  for (int i=0; i < dim_; i++) {
+    tmp(i) = (RandUniform() - 0.5) * 2 * range;
+  }
+  this->CopyFromVec(tmp);
+}
+
+
+template<typename Real>
 Real CuVectorBase<Real>::Sum() const {
   if (dim_ == 0)
     return 0.0;

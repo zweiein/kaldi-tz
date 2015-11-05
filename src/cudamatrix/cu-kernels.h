@@ -337,6 +337,17 @@ inline void cuda_apply_temporal_floor(dim3 Gr, dim3 Bl, const double *rows, doub
 inline void cuda_apply_temporal_heaviside(dim3 Gr, dim3 Bl, const float* floor_rows, float* mat, MatrixDim dim, int src_stride, float floor_coef) { cudaF_apply_temporal_heaviside(Gr,Bl,floor_rows,mat,dim,src_stride,floor_coef); }
 inline void cuda_apply_temporal_heaviside(dim3 Gr, dim3 Bl, const double* floor_rows, double* mat, MatrixDim dim, int src_stride, double floor_coef) { cudaD_apply_temporal_heaviside(Gr,Bl,floor_rows,mat,dim,src_stride,floor_coef); }
 
+//from eesen
+inline void cuda_add_mat_dot_mat(dim3 Gr, dim3 Bl, double *data, const double *srcA_data, const double *srcB_data, int transA,
+        int transB, MatrixDim dim, int srcA_stride, int srcB_stride, double alpha, double beta) {
+    cudaD_add_mat_dot_mat(Gr, Bl, data, srcA_data, srcB_data, transA, transB, dim, srcA_stride, srcB_stride, alpha, beta);
+}
+inline void cuda_add_mat_dot_mat(dim3 Gr, dim3 Bl, float *data, const float *srcA_data, const float *srcB_data, int transA,
+        int transB, MatrixDim dim, int srcA_stride, int srcB_stride, float alpha, float beta) {
+    cudaF_add_mat_dot_mat(Gr, Bl, data, srcA_data, srcB_data, transA, transB, dim, srcA_stride, srcB_stride, alpha, beta);
+}
+
+
 inline void cuda_apply_ceiling(dim3 Gr, dim3 Bl, double* mat, double ceiling_val, MatrixDim dim) { cudaD_apply_ceiling(Gr,Bl,mat,ceiling_val,dim); }
 inline void cuda_copy_cols(dim3 Gr, dim3 Bl, double* dst, const double* src, const MatrixIndexT_cuda* reorder, MatrixDim dst_dim, int src_stride) {
   cudaD_copy_cols(Gr, Bl, dst, src, reorder, dst_dim, src_stride);

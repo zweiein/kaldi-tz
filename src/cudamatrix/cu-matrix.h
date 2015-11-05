@@ -532,6 +532,15 @@ class CuMatrixBase {
 
   void SetRandUniform();
 
+  void InitRandUniform(Real range); // for lstm from eesen
+
+  
+  /// for bilstm from eesen(early version), dot product, element by element, *this = alpha * a * b + beta * *this;
+    void AddMatDotMat(const Real alpha,
+                    const CuMatrixBase<Real>& A, MatrixTransposeType transA,
+                    const CuMatrixBase<Real>& B, MatrixTransposeType transB,
+                    const Real beta); 
+
   void Write(std::ostream &os, bool binary) const;
 
   // This function, adds a list of MatrixElements (scaled by alpha) to corresponding locations to

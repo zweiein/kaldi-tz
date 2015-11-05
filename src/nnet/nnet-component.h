@@ -56,6 +56,10 @@ class Component {
     kConvolutional2DComponent,
     kLstmProjectedStreams,
     kBLstmProjectedStreams,
+    kLstm,      // following 4 from eesen(early version)
+    kLstmParallel,
+    kBiLstm,
+    kBiLstmParallel,
 
     kActivationFunction = 0x0200, 
     kSoftmax, 

@@ -616,6 +616,14 @@ void Nnet::SetSeqLengths(const std::vector<int32> &sequence_lengths) {
       BLstmProjectedStreams& comp = dynamic_cast<BLstmProjectedStreams&>(GetComponent(c));
       comp.SetSeqLengths(sequence_lengths);
     }
+    if (GetComponent(c).GetType() == Component::kLstmParallel) { // support kLstmParallel from eesen(early version)
+      LstmParallel& comp = dynamic_cast<LstmParallel&>(GetComponent(c));
+      comp.SetSeqLengths(sequence_lengths);
+    }
+    if (GetComponent(c).GetType() == Component::kBiLstmParallel) { // support kBiLstmParallel from eesen(early version)
+      BiLstmParallel& comp = dynamic_cast<BiLstmParallel&>(GetComponent(c));
+      comp.SetSeqLengths(sequence_lengths);
+    }
   }
 }
 

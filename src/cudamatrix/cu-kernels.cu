@@ -1405,6 +1405,22 @@ static void _apply_temporal_heaviside(const Real* floor_rows, Real* mat, MatrixD
 }
 
 
+template<typename Real>
+__global__
+static void _add_mat_dot_mat(Real *data, const Real *srcA_data, const Real *srcB_data, int trasA, int transB, MatrixDim dim, int srcA_stride, int srcB_stride, Real alpha, Real beta) {
+    // 1 represents kTrans, 0 represents kNoTrans
+    // but for now, only kNoTrans is availiable
+    int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
+    int32_cuda j = blockIdx.y * blockDim.y + threadIdx.y;
+    int32_cuda tgt_index = i + j*dim.stride;
+    int32_cuda srcA_index = i + j*srcA_stride;
+    int32_cuda srcB_index = i + j*srcB_stride;
+    if (i < dim.cols && j < dim.rows) {
+        data[tgt_index] = alpha*srcA_data[srcA_index]*srcB_data[srcB_index] + beta * data[tgt_index] ;
+    }
+}
+
+
 
 template<typename Real>
 __global__
@@ -2361,6 +2377,13 @@ void cudaF_apply_temporal_heaviside(dim3 Gr, dim3 Bl, const float* in, float* ma
 
 void cudaD_apply_temporal_heaviside(dim3 Gr, dim3 Bl, const double* in, double* mat, MatrixDim d, int src_stride, double floor_coef) {
   _apply_temporal_heaviside<<<Gr,Bl>>>(in,mat, d, src_stride, floor_coef);
+}
+
+void cudaF_add_mat_dot_mat(dim3 Gr, dim3 Bl, float *data, const float *srcA_data, const float *srcB_data, int transA, int transB, MatrixDim dim, int srcA_stride, int srcB_stride, float alpha, float beta) {
+    _add_mat_dot_mat<<<Gr, Bl>>>(data, srcA_data, srcB_data, transA, transB, dim, srcA_stride, srcB_stride, alpha, beta);
+}
+void cudaD_add_mat_dot_mat(dim3 Gr, dim3 Bl, double *data, const double *srcA_data, const double *srcB_data, int transA, int transB, MatrixDim dim, int srcA_stride, int srcB_stride, double alpha, double beta) {
+    _add_mat_dot_mat<<<Gr, Bl>>>(data, srcA_data, srcB_data, transA, transB, dim, srcA_stride, srcB_stride, alpha, beta);
 }
 
 void cudaF_apply_ceiling(dim3 Gr, dim3 Bl, float* mat, float ceiling_val, MatrixDim d) {

@@ -2585,6 +2585,41 @@ void CuMatrixBase<Real>::SetRandUniform() {
   }
 }
 
+
+template<typename Real>
+void CuMatrixBase<Real>::InitRandUniform(Real range) {
+  if (num_rows_ == 0) return;
+  this->SetRandUniform();   // randomly between [0, 1]
+//  this->Scale(2 * range);   // then between [0, 2*range]
+//  //  this->Add(-range);        // between [-range, range]
+  this->Add(-0.5);
+  this->Scale(2 * range);
+}
+
+
+
+template<typename Real>
+void CuMatrixBase<Real>::AddMatDotMat(Real alpha, 
+                                      const CuMatrixBase<Real> &A, MatrixTransposeType transA,
+                                      const CuMatrixBase<Real> &B, MatrixTransposeType transB, 
+                                      Real beta) {
+    KALDI_ASSERT(transA != kTrans);    // for now kTrans is not supported
+    KALDI_ASSERT(transB != kTrans);
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    dim3 dimBlock(CU2DBLOCK, CU2DBLOCK);
+    dim3 dimGrid(n_blocks(NumCols(), CU2DBLOCK), n_blocks(NumRows(), CU2DBLOCK));
+    cuda_add_mat_dot_mat(dimGrid, dimBlock, this->data_, A.Data(), B.Data(), 0, 0, Dim(), A.Stride(), B.Stride(), alpha, beta);
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    //Mat().AddMatDotMat(alpha, A.Mat(), transA, B.Mat(), transB, beta);
+  }
+}
+
+
 template<typename Real>
 void Matrix<Real>::Swap(CuMatrix<Real> *mat) { mat->Swap(this); }
 // instantiate the template above.

@@ -40,6 +40,11 @@
 #include "nnet/nnet-lstm-projected-streams.h"
 #include "nnet/nnet-blstm-projected-streams.h"
 
+#include "nnet/nnet-lstm.h"  // following 4 from eesen
+#include "nnet/nnet-lstm-parallel.h"
+#include "nnet/nnet-bilstm.h"
+#include "nnet/nnet-bilstm-parallel.h"
+
 #include "nnet/nnet-sentence-averaging-component.h"
 #include "nnet/nnet-frame-pooling-component.h"
 #include "nnet/nnet-parallel-component.h"
@@ -58,6 +63,10 @@ const struct Component::key_value Component::kMarkerMap[] = {
   { Component::kConvolutional2DComponent,"<Convolutional2DComponent>"},
   { Component::kLstmProjectedStreams,"<LstmProjectedStreams>"},
   { Component::kBLstmProjectedStreams,"<BLstmProjectedStreams>"},
+  { Component::kLstm,"<Lstm>"},  // following 4 from eesen
+  { Component::kLstmParallel,"<LstmParallel>"},
+  { Component::kBiLstm,"<BiLstm>"},
+  { Component::kBiLstmParallel,"<BiLstmParallel>"},
   { Component::kSoftmax,"<Softmax>" },
   { Component::kBlockSoftmax,"<BlockSoftmax>" },
   { Component::kSigmoid,"<Sigmoid>" },
@@ -132,6 +141,18 @@ Component* Component::NewComponentOfType(ComponentType comp_type,
       break;
     case Component::kBLstmProjectedStreams :
       ans = new BLstmProjectedStreams(input_dim, output_dim);
+      break;
+    case Component::kLstm : // following 4 from eesen
+      ans = new Lstm(input_dim, output_dim);
+      break;
+    case Component::kLstmParallel :
+      ans = new LstmParallel(input_dim, output_dim);
+      break;
+    case Component::kBiLstm :
+      ans = new BiLstm(input_dim, output_dim);
+      break;
+    case Component::kBiLstmParallel :
+      ans = new BiLstmParallel(input_dim, output_dim);
       break;
     case Component::kSoftmax :
       ans = new Softmax(input_dim, output_dim);

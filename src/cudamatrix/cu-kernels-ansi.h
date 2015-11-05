@@ -72,6 +72,13 @@ void cudaF_apply_temporal_floor(dim3 Gr, dim3 Bl, const float *rows, float floor
 void cudaD_apply_temporal_heaviside(dim3 Gr, dim3 Bl, const double* in, double* mat, MatrixDim d, int src_stride, double floor_coef);  
 void cudaF_apply_temporal_heaviside(dim3 Gr, dim3 Bl, const float* in, float* mat, MatrixDim d, int src_stride, float floor_coef);  
 
+// from eesen
+void cudaF_add_mat_dot_mat(dim3 Gr, dim3 Bl, float *data, const float *srcA_data, const float *srcB_data, int transA,
+        int transB, MatrixDim dim, int srcA_stride, int srcB_stride, float alpha, float beta);
+void cudaD_add_mat_dot_mat(dim3 Gr, dim3 Bl, double *data, const double *srcA_data, const double *srcB_data, int transA,
+        int transB, MatrixDim dim, int srcA_stride, int srcB_stride, double alpha, double beta);
+
+
 void cudaF_copy_cols(dim3 Gr, dim3 Bl, float* dst, const float* src, const MatrixIndexT_cuda* reorder, MatrixDim dst_dim, int src_stride);
 void cudaF_add_cols(dim3 Gr, dim3 Bl, float* dst, const float* src, const MatrixIndexT_cuda* reorder, MatrixDim dst_dim, int src_stride);
 void cudaF_copy_rows(dim3 Gr, dim3 Bl, float* dst, const float* src, const MatrixIndexT_cuda* reorder, MatrixDim dst_dim, int src_stride);
