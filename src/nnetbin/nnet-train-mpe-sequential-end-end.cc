@@ -1,4 +1,4 @@
-//  nnetbin/nnet-train-mpe-sequential.cc
+//  nnetbin/nnet-train-mpe-sequential-end-end.cc
 
 // Copyright 2011-2013  Brno University of Technology (author: Karel Vesely);  Arnab Ghoshal
 
