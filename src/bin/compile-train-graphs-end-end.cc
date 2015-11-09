@@ -44,8 +44,7 @@ int main(int argc, char *argv[]) {
 
     TrainingGraphCompilerOptionsEndEnd gopts;
     int32 batch_size = 250;
-	
-	gopts.transition_scale = 0.0;  // Change the default to 0.0 since we will generally add the
+    gopts.transition_scale = 0.0;  // Change the default to 0.0 since we will generally add the
     // transition probs in the alignment phase (since they change eacm time)
     gopts.self_loop_scale = 0.0;  // Ditto for self-loop probs.
     std::string disambig_rxfilename;
@@ -84,7 +83,7 @@ int main(int argc, char *argv[]) {
     //}
 
     // need VectorFst because we will change it by adding subseq symbol.
-	VectorFst<StdArc> *token_fst = fst::ReadFstKaldi(token_rxfilename);
+    VectorFst<StdArc> *token_fst = fst::ReadFstKaldi(token_rxfilename);
     VectorFst<StdArc> *lex_fst = fst::ReadFstKaldi(lex_rxfilename);
 
     std::vector<int32> disambig_syms;
@@ -95,7 +94,7 @@ int main(int argc, char *argv[]) {
     
     TrainingGraphCompilerEndEnd gc(token_fst, lex_fst, disambig_syms, gopts);
 
-	token_fst = NULL;
+    token_fst = NULL;
     lex_fst = NULL;  // we gave ownership to gc.
 
     SequentialInt32VectorReader transcript_reader(transcript_rspecifier);
