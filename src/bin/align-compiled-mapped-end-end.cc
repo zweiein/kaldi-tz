@@ -49,9 +49,9 @@ int main(int argc, char *argv[]) {
 
     align_config.Register(&po);
     po.Register("binary", &binary, "Write output in binary mode");
-    po.Register("transition-scale", &transition_scale,
+    po.Register("transition-scale", &transition_scale, // don't need, just for compatibility
                 "Transition-probability scale [relative to acoustics]");
-    po.Register("acoustic-scale", &acoustic_scale,
+    po.Register("acoustic-scale", &acoustic_scale, // don't need, just for compatibility
                 "Scaling factor for acoustic likelihoods");
     po.Register("self-loop-scale", &self_loop_scale,
                 "Scale of self-loop versus non-self-loop log probs [relative to acoustics]");
