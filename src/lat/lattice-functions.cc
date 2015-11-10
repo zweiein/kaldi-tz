@@ -934,7 +934,7 @@ BaseFloat LatticeForwardBackwardMpeVariantsEndEnd(
   typedef Arc::Weight Weight;
   typedef Arc::StateId StateId;
 
-  KALDI_ASSERT(criterion == "mpfe" || criterion == "smbr");
+  KALDI_ASSERT(criterion == "mpfe" || criterion == "smbr"); // doesn't matter
   bool is_mpfe = (criterion == "mpfe");
   
   if (lat.Properties(fst::kTopSorted, true) == 0)
@@ -1005,7 +1005,7 @@ BaseFloat LatticeForwardBackwardMpeVariantsEndEnd(
         int32 cur_time = state_times[s];
         //int32 phone = trans.TransitionIdToPhone(arc.ilabel),
         //    ref_phone = trans.TransitionIdToPhone(num_ali[cur_time]);
-        int32 phone = arc.ilabel,
+        int32 phone = arc.ilabel, // arc.ilabel and num_ali both refer to token, so not "-1"
             ref_phone = num_ali[cur_time];
         bool phone_is_sil = std::binary_search(silence_phones.begin(),
                                                silence_phones.end(),
@@ -1014,7 +1014,7 @@ BaseFloat LatticeForwardBackwardMpeVariantsEndEnd(
                                                   silence_phones.end(),
                                                   ref_phone),
             both_sil = phone_is_sil && ref_phone_is_sil;
-        if (!is_mpfe) { // smbr.
+        if (!is_mpfe) { // smbr. It doesn't matter for end-end. 
           //int32 pdf = trans.TransitionIdToPdf(arc.ilabel),
           //    ref_pdf = trans.TransitionIdToPdf(num_ali[cur_time]);
 		  int32 pdf = arc.ilabel,
