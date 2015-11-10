@@ -65,8 +65,8 @@ void LatticeAcousticRescoreEndEnd(const Matrix<BaseFloat> &log_like,
       for (fst::MutableArcIterator<Lattice> aiter(lat, state); !aiter.Done();
            aiter.Next()) {
         LatticeArc arc = aiter.Value();
-		int32 label_id = arc.ilabel-1;  //In this end-to-end system, there is shift 1 between token id and unit id
-        if (label_id != 0) {  // Non-epsilon input label on arc
+        int32 label_id = arc.ilabel-1;  //In this end-to-end system, there is shift 1 between token id and unit id
+        if (arc.ilabel != 0) {  // Non-epsilon input label on arc
           arc.weight.SetValue2(-log_like(t, label_id) + arc.weight.Value2());
           aiter.SetValue(arc);
         }
