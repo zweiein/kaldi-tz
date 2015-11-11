@@ -87,8 +87,8 @@ bool TrainingGraphCompilerEndEnd::CompileGraph(const fst::VectorFst<fst::StdArc>
   MinimizeEncoded(&phone2word_fst);
   TableCompose(*token_fst_, phone2word_fst, &token2word_fst, &token_cache_);
   KALDI_ASSERT(token2word_fst.Start() != kNoStateId);
-  DeterminizeStarInLog(&token2word_fst);
-  MinimizeEncoded(&token2word_fst);
+  // DeterminizeStarInLog(&token2word_fst); // sometimes can't go through, DeterminizeInLog is OK
+  // MinimizeEncoded(&token2word_fst);
 
 
   // Epsilon-removal and determinization combined. This will fail if not determinizable.
@@ -141,8 +141,8 @@ bool TrainingGraphCompilerEndEnd::CompileGraphs(
 	VectorFst<StdArc> token2word_fst;
 	TableCompose(*token_fst_, phone2word_fst, &token2word_fst, &token_cache_);
 	KALDI_ASSERT(token2word_fst.Start() != kNoStateId);
-	DeterminizeStarInLog(&token2word_fst);
-	MinimizeEncoded(&token2word_fst);
+	//DeterminizeStarInLog(&token2word_fst); // sometimes can't go through, DeterminizeInLog is OK
+	//MinimizeEncoded(&token2word_fst);
 	
 	// Epsilon-removal and determinization combined. This will fail if not determinizable.
 	//DeterminizeStarInLog(&token2word_fst);
