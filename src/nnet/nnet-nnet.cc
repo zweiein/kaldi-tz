@@ -110,7 +110,7 @@ void Nnet::Propagate(const CuMatrixBase<BaseFloat> &in, const std::vector<CuMatr
   for(int32 i=0; i<(int32)components_.size(); i++) {
       if((components_[i]->GetType() == Component::kAffineTransformExtra)  && propagate_buf_extra_[i].Sum()!=0.0) { 
         AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[i]);
-        comp->PropagateFnc(propagate_buf_[i], propagate_buf_extra_[i], &propagate_buf_[i+1]); //only realized in AffineTransformExtra
+        comp->PropagateFncExtra(propagate_buf_[i], propagate_buf_extra_[i], &propagate_buf_[i+1]); //only realized in AffineTransformExtra
       }
     else{
         components_[i]->Propagate(propagate_buf_[i], &propagate_buf_[i+1]);
@@ -232,7 +232,7 @@ void Nnet::Feedforward(const CuMatrixBase<BaseFloat> &in, const std::vector<CuMa
   if (NumComponents() == 1) {
       if(components_[0]->GetType() == Component::kAffineTransformExtra && in_extras[0].Sum()!=0.0){ 
         AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[0]);
-        comp->PropagateFnc(in, in_extras[0], out); //only realized in AffineTransformExtra
+        comp->PropagateFncExtra(in, in_extras[0], out); //only realized in AffineTransformExtra
       }
       else{
         components_[0]->Propagate(in, out);
@@ -247,7 +247,7 @@ void Nnet::Feedforward(const CuMatrixBase<BaseFloat> &in, const std::vector<CuMa
   int32 L = 0;
   if(components_[L]->GetType() == Component::kAffineTransformExtra && in_extras[0].Sum()!=0.0){ 
         AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[L]);
-        comp->PropagateFnc(in, in_extras[0], &propagate_buf_[L%2]); //only realized in AffineTransformExtra
+        comp->PropagateFncExtra(in, in_extras[0], &propagate_buf_[L%2]); //only realized in AffineTransformExtra
   }
   else{
         components_[L]->Propagate(in, &propagate_buf_[L%2]);
@@ -257,7 +257,7 @@ void Nnet::Feedforward(const CuMatrixBase<BaseFloat> &in, const std::vector<CuMa
   for(L++; L<=NumComponents()-2; L++) {
        if(components_[L]->GetType() == Component::kAffineTransformExtra && in_extras[L].Sum()!=0.0){ 
          AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[L]);
-         comp->PropagateFnc(propagate_buf_[(L-1)%2], in_extras[L], &propagate_buf_[L%2]); //only realized in AffineTransformExtra
+         comp->PropagateFncExtra(propagate_buf_[(L-1)%2], in_extras[L], &propagate_buf_[L%2]); //only realized in AffineTransformExtra
        }
        else{
         components_[L]->Propagate(propagate_buf_[(L-1)%2], &propagate_buf_[L%2]);
@@ -267,7 +267,7 @@ void Nnet::Feedforward(const CuMatrixBase<BaseFloat> &in, const std::vector<CuMa
 
   if(components_[L]->GetType() == Component::kAffineTransformExtra && in_extras[L].Sum()!=0.0){ 
         AffineTransformExtra* comp = dynamic_cast<AffineTransformExtra*>(components_[L]);
-        comp->PropagateFnc(propagate_buf_[(L-1)%2], in_extras[L], out); //only realized in AffineTransformExtra
+                                        comp->PropagateFncExtra(propagate_buf_[(L-1)%2], in_extras[L], out); //only realized in AffineTransformExtra
   }
   else{
         components_[L]->Propagate(propagate_buf_[(L-1)%2], out);
@@ -311,6 +311,7 @@ void Nnet::AppendComponent(Component* dynamically_allocated_comp) {
   components_.push_back(dynamically_allocated_comp);
   // create training buffers,
   propagate_buf_.resize(NumComponents()+1);
+  propagate_buf_extra_.resize(NumComponents()+1);
   backpropagate_buf_.resize(NumComponents()+1);
   //
   Check();
@@ -323,6 +324,7 @@ void Nnet::AppendNnet(const Nnet& nnet_to_append) {
   }
   // create training buffers,
   propagate_buf_.resize(NumComponents()+1);
+  propagate_buf_extra_.resize(NumComponents()+1);
   backpropagate_buf_.resize(NumComponents()+1);
   //
   Check();
@@ -336,6 +338,7 @@ void Nnet::RemoveComponent(int32 component) {
   delete ptr;
   // create training buffers,
   propagate_buf_.resize(NumComponents()+1);
+  propagate_buf_extra_.resize(NumComponents()+1);
   backpropagate_buf_.resize(NumComponents()+1);
   // 
   Check();
@@ -771,6 +774,7 @@ std::string Nnet::InfoBackPropagate() const {
 void Nnet::Check() const {
   // check we have correct number of buffers,
   KALDI_ASSERT(propagate_buf_.size() == NumComponents()+1);
+  KALDI_ASSERT(propagate_buf_extra_.size() == NumComponents()+1);
   KALDI_ASSERT(backpropagate_buf_.size() == NumComponents()+1);
   // check dims,
   for (size_t i = 0; i + 1 < components_.size(); i++) {
@@ -798,6 +802,7 @@ void Nnet::Destroy() {
   }
   components_.resize(0);
   propagate_buf_.resize(0);
+  propagate_buf_extra_.resize(0);
   backpropagate_buf_.resize(0);
 }
 

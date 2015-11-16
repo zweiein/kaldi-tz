@@ -59,7 +59,7 @@ class AffineTransformExtra : public UpdatableComponent {
       else if (token == "<LearnRateCoef>") ReadBasicType(is, false, &learn_rate_coef);
       else if (token == "<BiasLearnRateCoef>") ReadBasicType(is, false, &bias_learn_rate_coef);
       else if (token == "<MaxNorm>") ReadBasicType(is, false, &max_norm);
-	  else if (token == "<InputDimExtra>") ReadBasicType(is, false, &input_dim_extra);
+      else if (token == "<InputDimExtra>") ReadBasicType(is, false, &input_dim_extra);
       else KALDI_ERR << "Unknown token " << token << ", a typo in config?"
                      << " (ParamStddev|BiasMean|BiasRange|LearnRateCoef|BiasLearnRateCoef)";
       is >> std::ws; // eat-up whitespace
@@ -76,7 +76,7 @@ class AffineTransformExtra : public UpdatableComponent {
     }
     linearity_ = mat;
 
-	Matrix<BaseFloat> mat_extra(output_dim_, input_dim_extra);
+    Matrix<BaseFloat> mat_extra(output_dim_, input_dim_extra);
     for (int32 r_extra=0; r_extra<output_dim_; r_extra++) {
       for (int32 c_extra=0; c_extra<input_dim_extra; c_extra++) {
         mat_extra(r_extra,c_extra) = param_stddev * RandGauss(); // 0-mean Gauss with given std_dev
@@ -95,7 +95,7 @@ class AffineTransformExtra : public UpdatableComponent {
     learn_rate_coef_ = learn_rate_coef;
     bias_learn_rate_coef_ = bias_learn_rate_coef;
     max_norm_ = max_norm;
-	input_dim_extra_ = input_dim_extra;
+    input_dim_extra_ = input_dim_extra;
     //
   }
 
@@ -115,14 +115,14 @@ class AffineTransformExtra : public UpdatableComponent {
     }
     // weights
     linearity_.Read(is, binary);
-	linearity_extra_.Read(is, binary);
+    linearity_extra_.Read(is, binary);
     bias_.Read(is, binary);
-	linearity_extra_corr_.Resize(output_dim_, input_dim_extra_);
+    linearity_extra_corr_.Resize(output_dim_, input_dim_extra_);
 
     KALDI_ASSERT(linearity_.NumRows() == output_dim_);
     KALDI_ASSERT(linearity_.NumCols() == input_dim_);
-	KALDI_ASSERT(linearity_extra_.NumRows() == output_dim_);
-	KALDI_ASSERT(linearity_extra_.NumCols() == input_dim_extra_);
+    KALDI_ASSERT(linearity_extra_.NumRows() == output_dim_);
+    KALDI_ASSERT(linearity_extra_.NumCols() == input_dim_extra_);
     KALDI_ASSERT(bias_.Dim() == output_dim_);
   }
 
@@ -137,7 +137,7 @@ class AffineTransformExtra : public UpdatableComponent {
     WriteBasicType(os, binary, max_norm_);
     // weights
     linearity_.Write(os, binary);
-	linearity_extra_.Write(os, binary);
+    linearity_extra_.Write(os, binary);
     bias_.Write(os, binary);
   }
 
@@ -175,9 +175,9 @@ class AffineTransformExtra : public UpdatableComponent {
   }
 
 
-  void PropagateFnc(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &in_extra, CuMatrix<BaseFloat> *out) {
+  void PropagateFncExtra(const CuMatrixBase<BaseFloat> &in, const CuMatrixBase<BaseFloat> &in_extra, CuMatrix<BaseFloat> *out) {
     // precopy bias
-        KALDI_ASSERT(in_extra.NumCols()==input_dim_extra_);
+    KALDI_ASSERT(in_extra.NumCols()==linearity_extra_.NumCols());
 	KALDI_ASSERT(in.NumCols() == linearity_.NumCols());
 	KALDI_ASSERT(in.NumRows() == in_extra.NumRows());
     out->Resize(in.NumRows(), linearity_.NumRows());
