@@ -39,7 +39,7 @@ Nnet::Nnet(const Nnet& other) {
   // create empty buffers
   propagate_buf_.resize(NumComponents()+1);
   backpropagate_buf_.resize(NumComponents()+1);
-  propagate_buf_extra_.resize(NumComponents()+1);
+  propagate_buf_extra_.resize(NumComponents()+1); // Actually, propagate_buf_extra_ needs size of NumComponents()
   // copy train opts
   SetTrainOptions(other.opts_);
   Check();
