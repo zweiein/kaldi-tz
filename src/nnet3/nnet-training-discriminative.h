@@ -1,4 +1,4 @@
-// nnet3/nnet-training.h
+// nnet3/nnet-training-.h
 
 // Copyright    2015  Johns Hopkins University (author: Daniel Povey)
 
@@ -17,14 +17,16 @@
 // See the Apache 2 License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef KALDI_NNET3_NNET_TRAINING_H_
-#define KALDI_NNET3_NNET_TRAINING_H_
+#ifndef KALDI_NNET3_NNET_TRAINING_DISCRIMINATIVE_H_
+#define KALDI_NNET3_NNET_TRAINING_DISCRIMINATIVE_H_
 
+#include "nnet3/am-nnet-simple.h"
 #include "nnet3/nnet-example.h"
 #include "nnet3/nnet-computation.h"
 #include "nnet3/nnet-compute.h"
 #include "nnet3/nnet-optimize.h"
 #include "nnet3/nnet-example-utils.h"
+#include "hmm/transition-model.h"
 
 namespace kaldi {
 namespace nnet3 {
@@ -38,13 +40,29 @@ struct NnetTrainerOptions {
   BaseFloat max_param_change;
   NnetOptimizeOptions optimize_config;
   NnetComputeOptions compute_config;
+  std::string criterion; // "mmi" or "mpe" or "smbr"
+  BaseFloat acoustic_scale; // e.g. 0.1
+  bool drop_frames; // for MMI, true if we ignore frames where alignment
+                    // pdf-id is not in the lattice.
+  bool one_silence_class;  // Affects MPE/SMBR>
+  BaseFloat boost; // for MMI, boosting factor (would be Boosted MMI)... e.g. 0.1.
+
+  std::string silence_phones_str; // colon-separated list of integer ids of silence phones,
+                                  // for MPE/SMBR only.
   NnetTrainerOptions():
       zero_component_stats(true),
       store_component_stats(true),
       print_interval(100),
       debug_computation(false),
       momentum(0.0),
-      max_param_change(1.0) { }
+      max_param_change(1.0),
+      criterion("smbr"), 
+      acoustic_scale(0.1),
+      drop_frames(false),
+      one_silence_class(false),
+      boost(0.0) { }
+	  
+	  
   void Register(OptionsItf *opts) {
     opts->Register("store-component-stats", &store_component_stats,
                    "If true, store activations and derivatives for nonlinear "
@@ -64,6 +82,20 @@ struct NnetTrainerOptions {
                    "so that the 'effective' learning rate is the same as "
                    "before (because momentum would normally increase the "
                    "effective learning rate by 1/(1-momentum))");
+	opts->Register("criterion", &criterion, "Criterion, 'mmi'|'mpe'|'smbr', "
+                   "determines the objective function to use.  Should match "
+                   "option used when we created the examples.");
+    opts->Register("acoustic-scale", &acoustic_scale, "Weighting factor to "
+                   "apply to acoustic likelihoods.");
+    opts->Register("drop-frames", &drop_frames, "For MMI, if true we drop frames "
+                   "with no overlap of num and den frames");
+    opts->Register("boost", &boost, "Boosting factor for boosted MMI (e.g. 0.1)");
+    opts->Register("one-silence-class", &one_silence_class, "If true, newer "
+                   "behavior which will tend to reduce insertions.");
+    opts->Register("silence-phones", &silence_phones_str,
+                   "For MPFE or SMBR, colon-separated list of integer ids of "
+                   "silence phones, e.g. 1:2:3");
+
 
     // register the optimization options with the prefix "optimization".
     ParseOptions optimization_opts("optimization", opts);
@@ -76,70 +108,44 @@ struct NnetTrainerOptions {
   }
 };
 
-// This struct is used in multiple nnet training classes for keeping
-// track of objective function values.
-// Also see struct AccuracyInfo, in nnet-diagnostics.h.
-struct ObjectiveFunctionInfo {
-  int32 current_phase;
-
-  double tot_weight;
-  double tot_objf;
-
-  double tot_weight_this_phase;
-  double tot_objf_this_phase;
-
-  ObjectiveFunctionInfo():
-      current_phase(0),
-      tot_weight(0.0), tot_objf(0.0),
-      tot_weight_this_phase(0.0), tot_objf_this_phase(0.0) { }
-
-  // This function updates the stats and, if the phase has just changed,
-  // prints a message indicating progress.  The phase equals
-  // minibatch_counter / minibatches_per_phase.  Its only function is to
-  // control how frequently we print logging messages.
-  void UpdateStats(const std::string &output_name,
-                   int32 minibatches_per_phase,
-                   int32 minibatch_counter,
-                   BaseFloat this_minibatch_weight,
-                   BaseFloat this_minibatch_tot_objf);
-
-  // Prints stats for the current phase.
-  void PrintStatsForThisPhase(const std::string &output_name,
-                              int32 minibatches_per_phase) const;
-  // Prints total stats, and returns true if total stats' weight was nonzero.
-  bool PrintTotalStats(const std::string &output_name) const;
+struct NnetDiscriminativeStats {
+  double tot_t; // total number of frames
+  double tot_t_weighted; // total number of frames times weight.
+  double tot_num_count; // total count of numerator posterior (should be
+                        // identical to denominator-posterior count, so we don't
+                        // separately compute that).
+  double tot_num_objf;  // for MMI, the (weighted) numerator likelihood; for
+                        // SMBR/MPFE, 0.
+  double tot_den_objf;  // for MMI, the (weighted) denominator likelihood; for
+                        // SMBR/MPFE, the objective function.
+  NnetDiscriminativeStats() { std::memset(this, 0, sizeof(*this)); }
+  void Print(std::string criterion); // const NnetDiscriminativeUpdateOptions &opts);
+  void Add(const NnetDiscriminativeStats &other);
 };
-
-
-/** This class is for single-threaded training of neural nets using
-    standard objective functions such as cross-entropy (implemented with
-    logsoftmax nonlinearity and a linear objective function) and quadratic loss.
-
-    Something that we should do in the future is to make it possible to have
-    two different threads, one for the compilation, and one for the computation.
-    This would only improve efficiency in the cases where the structure of the
-    input example was different each time, which isn't what we expect to see in
-    speech-recognition training.  (If the structure is the same each time,
-    the CachingOptimizingCompiler notices this and uses the computation from
-    last time).
- */
 class NnetTrainer {
  public:
-  NnetTrainer(const NnetTrainerOptions &config,
-              Nnet *nnet);
 
-  // train on one minibatch.
-  void Train(const NnetExample &eg);
+  NnetTrainer(const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,
+              const TransitionModel &tmodel, Nnet *nnet,
+              NnetDiscriminativeStats *stats);
 
-  // Prints out the final stats, and return true if there was a nonzero count.
-  bool PrintTotalStats() const;
+  void Train(NnetDiscriminativeStats *stats,const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,const NnetExample &eg, Lattice clat, std::vector<int32> num_ali);
 
   ~NnetTrainer();
  private:
-  void ProcessOutputs(const NnetExample &eg,
-                      NnetComputer *computer);
-
-  const NnetTrainerOptions config_;
+void ProcessOutputs(NnetDiscriminativeStats *stats, const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,const NnetExample &eg,Lattice clat,std::vector<int32> num_ali,NnetComputer *computer);
+  typedef LatticeArc Arc;
+  typedef Arc::StateId StateId;
+  const NnetTrainerOptions opts_;
+  const TransitionModel &tmodel_;
+  const AmNnetSimple &am_nnet_;
+   // will equal am_nnet_.GetNnet(), in SGD case, or
+                         // another Nnet, in gradient-computation case, or
+                         // NULL if we just need the objective function.
+  NnetDiscriminativeStats *stats_; // the objective function, etc.
+  Lattice clat_; // we convert the CompactLattice in the eg, into Lattice form.
+  std::vector<int32> num_ali; 
+  std::vector<int32> silence_phones_; 
   Nnet *nnet_;
   Nnet *delta_nnet_;  // Only used if momentum != 0.0.  nnet representing
                       // accumulated parameter-change (we'd call this
@@ -147,12 +153,6 @@ class NnetTrainer {
                       // it's better to consider it as a delta-parameter nnet.
   CachingOptimizingCompiler compiler_;
 
-  // This code supports multiple output layers, even though in the
-  // normal case there will be just one output layer named "output".
-  // So we store the objective functions per output layer.
-  int32 num_minibatches_processed_;
-
-  unordered_map<std::string, ObjectiveFunctionInfo, StringHasher> objf_info_;
 };
 
 /**
@@ -189,16 +189,16 @@ class NnetTrainer {
   @param [out] tot_objf      The total objective function; divide this by the
                              tot_weight to get the normalized objective function.
 */
-void ComputeObjectiveFunction(const GeneralMatrix &supervision,
-                              ObjectiveType objective_type,
-                              const std::string &output_name,
-                              bool supply_deriv,
-                              NnetComputer *computer,
-                              BaseFloat *tot_weight,
-                              BaseFloat *tot_objf);
+void LatticeComputations(NnetDiscriminativeStats *stats, ObjectiveType objective_type,const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,Lattice clat,std::vector<int32> num_ali,const GeneralMatrix &supervision,const std::string &output_name,bool supply_deriv,NnetComputer *computer,BaseFloat *tot_weight,BaseFloat *tot_objf);
 
+double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,const GeneralMatrix &supervision, Lattice clat,std::vector<int32> num_ali,Posterior *post);	 
 
-
+static inline Int32Pair MakePair(int32 first, int32 second) {
+    Int32Pair ans;
+    ans.first = first;
+    ans.second = second;
+    return ans;
+  }
 } // namespace nnet3
 } // namespace kaldi
 
