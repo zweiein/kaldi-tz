@@ -122,35 +122,37 @@ struct NnetDiscriminativeStats {
   void Print(std::string criterion); // const NnetDiscriminativeUpdateOptions &opts);
   void Add(const NnetDiscriminativeStats &other);
 };
-class NnetTrainer {
+
+class NnetTrainerDiscriminative {
  public:
 
-  NnetTrainer(const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,
-              const TransitionModel &tmodel, Nnet *nnet,
-              NnetDiscriminativeStats *stats);
+  NnetTrainerDiscriminative (const NnetTrainerOptions &opts, 
+                                        const AmNnetSimple &am_nnet, 
+                                        const TransitionModel &tmodel, 
+                                        Nnet *nnet, 
+                                        NnetDiscriminativeStats *stats);
 
-  void Train(NnetDiscriminativeStats *stats,const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,const NnetExample &eg, Lattice clat, std::vector<int32> num_ali);
+  void Train (const NnetExample &eg, Lattice clat, std::vector<int32> num_ali);
 
-  ~NnetTrainer();
+  ~NnetTrainerDiscriminative ();
+  
  private:
-void ProcessOutputs(NnetDiscriminativeStats *stats, const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,const NnetExample &eg,Lattice clat,std::vector<int32> num_ali,NnetComputer *computer);
+  void ProcessOutputs(const NnetExample &eg, const Lattice &clat, 
+                            const std::vector<int32> &num_ali, NnetComputer *computer);
   typedef LatticeArc Arc;
   typedef Arc::StateId StateId;
   const NnetTrainerOptions opts_;
-  const TransitionModel &tmodel_;
-  const AmNnetSimple &am_nnet_;
-   // will equal am_nnet_.GetNnet(), in SGD case, or
-                         // another Nnet, in gradient-computation case, or
-                         // NULL if we just need the objective function.
-  NnetDiscriminativeStats *stats_; // the objective function, etc.
-  Lattice clat_; // we convert the CompactLattice in the eg, into Lattice form.
-  std::vector<int32> num_ali; 
-  std::vector<int32> silence_phones_; 
+  const AmNnetSimple am_nnet_;
+  const TransitionModel tmodel_;
+  
+  NnetDiscriminativeStats *stats_; // the objective function, etc. 
   Nnet *nnet_;
   Nnet *delta_nnet_;  // Only used if momentum != 0.0.  nnet representing
                       // accumulated parameter-change (we'd call this
                       // gradient_nnet_, but due to natural-gradient update,
                       // it's better to consider it as a delta-parameter nnet.
+  
+  std::vector<int32> silence_phones_;
   CachingOptimizingCompiler compiler_;
 
 };
@@ -189,16 +191,36 @@ void ProcessOutputs(NnetDiscriminativeStats *stats, const NnetTrainerOptions &op
   @param [out] tot_objf      The total objective function; divide this by the
                              tot_weight to get the normalized objective function.
 */
-void LatticeComputations(NnetDiscriminativeStats *stats, ObjectiveType objective_type,const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,Lattice clat,std::vector<int32> num_ali,const GeneralMatrix &supervision,const std::string &output_name,bool supply_deriv,NnetComputer *computer,BaseFloat *tot_weight,BaseFloat *tot_objf);
+ void LatticeComputations(NnetDiscriminativeStats *stats, 
+                                  ObjectiveType objective_type,
+                                  const NnetTrainerOptions &opts,
+                                  const AmNnetSimple &am_nnet,
+                                  const TransitionModel &tmodel,
+                                  const Lattice &clat,
+                                  const std::vector<int32> &num_ali,
+                                  const GeneralMatrix &supervision,
+                                  const std::string &output_name,
+                                  bool supply_deriv,
+                                  NnetComputer *computer,
+                                  BaseFloat *tot_weight,
+                                  BaseFloat *tot_objf);
 
-double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,const GeneralMatrix &supervision, Lattice clat,std::vector<int32> num_ali,Posterior *post);	 
+ double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
+                                                const AmNnetSimple &am_nnet,
+                                                const TransitionModel &tmodel,
+                                                const GeneralMatrix &supervision, 
+                                                const Lattice &clat,
+                                                const std::vector<int32> &num_ali,
+                                                Posterior *post);   
 
-static inline Int32Pair MakePair(int32 first, int32 second) {
+ static inline Int32Pair MakePair(int32 first, int32 second) {
     Int32Pair ans;
     ans.first = first;
     ans.second = second;
     return ans;
-  }
+ }
+
+ 
 } // namespace nnet3
 } // namespace kaldi
 

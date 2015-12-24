@@ -33,28 +33,32 @@ namespace kaldi {
 namespace nnet3 {
 	
 
-NnetTrainer::NnetTrainer(const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,
-		    const TransitionModel &tmodel, Nnet *nnet,
-			NnetDiscriminativeStats *stats):
-            opts_(opts),am_nnet_(am_nnet),tmodel_(tmodel),
-			nnet_(nnet),stats_(stats),
-     compiler_(*nnet, opts_.optimize_config) {
+NnetTrainerDiscriminative::NnetTrainerDiscriminative (const NnetTrainerOptions &opts, 
+                                        const AmNnetSimple &am_nnet, 
+                                        const TransitionModel &tmodel, 
+                                        Nnet *nnet, 
+                                        NnetDiscriminativeStats *stats):
+            opts_(opts), am_nnet_(am_nnet), tmodel_(tmodel),
+			nnet_(nnet), stats_(stats), compiler_(*nnet, opts_.optimize_config) {
  
-	  if (opts.zero_component_stats) 
-    ZeroComponentStats(nnet);
-  if (opts.momentum == 0.0 && opts.max_param_change == 0.0) {
-    delta_nnet_= NULL;
-  } else {
-    KALDI_ASSERT(opts.momentum >= 0.0 &&
-                 opts.max_param_change >= 0.0);
-    delta_nnet_ = nnet_->Copy();
-    bool is_gradient = false;  // setting this to true would disable the
-                               // natural-gradient updates.
-    SetZero(is_gradient, delta_nnet_);
-  }
+      if (opts_.zero_component_stats) 
+        ZeroComponentStats(nnet_);
+      if (opts_.momentum == 0.0 && opts_.max_param_change == 0.0) {
+        delta_nnet_= NULL;
+      } else {
+        KALDI_ASSERT(opts_.momentum >= 0.0 &&
+                 opts_.max_param_change >= 0.0);
+        delta_nnet_ = nnet_->Copy();
+        bool is_gradient = false;  //setting this to true would disable the
+                                   // natural-gradient updates.
+        SetZero(is_gradient, delta_nnet_);
+      }
 
 }
-void NnetTrainer::Train(NnetDiscriminativeStats *stats, const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,const NnetExample &eg, Lattice clat, std::vector<int32> num_ali) {
+            
+void NnetTrainerDiscriminative::Train(const NnetExample &eg, 
+                                        const Lattice &clat, 
+                                        const std::vector<int32> &num_ali) {
   bool need_model_derivative = true;
   ComputationRequest request;
 
@@ -69,7 +73,7 @@ void NnetTrainer::Train(NnetDiscriminativeStats *stats, const NnetTrainerOptions
   // give the inputs to the computer object.
   computer.AcceptInputs(*nnet_, eg.io);
   computer.Forward();
-  this->ProcessOutputs(stats,opts,am_nnet,tmodel,eg,clat,num_ali,&computer);
+  this->ProcessOutputs(stats_, opts_, am_nnet_, tmodel_, eg, clat, num_ali, &computer);
   computer.Backward();
 
   if (delta_nnet_ != NULL) {
@@ -94,8 +98,8 @@ void NnetTrainer::Train(NnetDiscriminativeStats *stats, const NnetTrainerOptions
   }
 }
 
-void NnetTrainer::ProcessOutputs(NnetDiscriminativeStats *stats,const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,const NnetExample &eg,Lattice clat,std::vector<int32> num_ali,NnetComputer *computer)
-	{
+void NnetTrainerDiscriminative::ProcessOutputs(const NnetExample &eg, const Lattice &clat, 
+                            const std::vector<int32> &num_ali, NnetComputer *computer) {
 
 	if (!SplitStringToIntegers(opts_.silence_phones_str, ":", false,
 				                             &silence_phones_)) {
@@ -113,35 +117,50 @@ void NnetTrainer::ProcessOutputs(NnetDiscriminativeStats *stats,const NnetTraine
       ObjectiveType obj_type = nnet_->GetNode(node_index).u.objective_type;
       BaseFloat tot_weight, tot_objf;
       bool supply_deriv = true;
-      LatticeComputations(stats_,obj_type,opts,am_nnet,tmodel,clat,num_ali,io.features,io.name,supply_deriv, computer,&tot_weight, &tot_objf);
+      LatticeComputations(stats_,obj_type,
+                          opts_,am_nnet_,tmodel_,
+                          clat,num_ali,io.features,
+                          io.name,supply_deriv, computer,
+                          &tot_weight, &tot_objf);
     }
   }
 }
 
-NnetTrainer::~NnetTrainer() {
+NnetTrainerDiscriminative::~NnetTrainerDiscriminative() {
   delete delta_nnet_;
 }
-void LatticeComputations(NnetDiscriminativeStats *stats_,ObjectiveType objective_type,const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,Lattice clat,std::vector<int32> num_ali,const GeneralMatrix &supervision,const std::string &output_name,bool supply_deriv,NnetComputer *computer,BaseFloat *tot_weight,BaseFloat *tot_objf) {
-Nnet nnet_;
-BaseFloat eg_weight = 1;
-const NnetTrainerOptions opts_;
-const NnetExample eg_;
-std::vector<int32> silence_phones_; // derived from opts_.silence_phones_str
-const CuMatrixBase<BaseFloat> &output = computer->GetOutput(output_name);
-if (output.NumCols() != supervision.NumCols())
+void LatticeComputations(NnetDiscriminativeStats *stats, 
+                                  ObjectiveType objective_type,
+                                  const NnetTrainerOptions &opts,
+                                  const AmNnetSimple &am_nnet,
+                                  const TransitionModel &tmodel,
+                                  const Lattice &clat,
+                                  const std::vector<int32> &num_ali,
+                                  const GeneralMatrix &supervision,
+                                  const std::string &output_name,
+                                  bool supply_deriv,
+                                  NnetComputer *computer,
+                                  BaseFloat *tot_weight,
+                                  BaseFloat *tot_objf) {
+
+ BaseFloat eg_weight = 1;
+ const NnetExample eg_;
+ std::vector<int32> silence_phones = opts.silence_phones_str;
+ const CuMatrixBase<BaseFloat> &output = computer->GetOutput(output_name);
+ if (output.NumCols() != supervision.NumCols())
     KALDI_ERR << "Nnet versus example output dimension (num-classes) "
               << "mismatch for '" << output_name << "': " << output.NumCols()
               << " (nnet) vs. " << supervision.NumCols() << " (egs)\n";
-switch (objective_type) {
+ switch (objective_type) {
 	case kMpe: {
-  if (opts_.criterion == "mmi" && opts_.boost != 0.0) {
+  if (opts.criterion == "mmi" && opts.boost != 0.0) {
     BaseFloat max_silence_error = 0.0;
-    LatticeBoost(tmodel, num_ali, silence_phones_,opts_.boost, max_silence_error, &clat);
+    LatticeBoost(tmodel, num_ali, silence_phones,opts.boost, max_silence_error, &clat);
   }
   
   int32 num_frames = num_ali.size();
-  stats_->tot_t += num_frames;
-  stats_->tot_t_weighted += num_frames * eg_weight;
+  stats->tot_t += num_frames;
+  stats->tot_t_weighted += num_frames * eg_weight;
   std::vector<CuMatrix<BaseFloat> > forward_data_; 
   const VectorBase<BaseFloat> &priors = am_nnet.Priors();
   const CuMatrixBase<BaseFloat> &posteriors = output;
@@ -149,8 +168,8 @@ switch (objective_type) {
   int32 num_pdfs = posteriors.NumCols();
 
   KALDI_ASSERT(num_pdfs == priors.Dim());
- typedef LatticeArc Arc;
- typedef Arc::StateId StateId;
+  typedef LatticeArc Arc;
+  typedef Arc::StateId StateId;
   
   // We need to look up the posteriors of some pdf-ids in the matrix
   // "posteriors".  Rather than looking them all up using operator (), which is
@@ -165,7 +184,7 @@ switch (objective_type) {
   BaseFloat wiggle_room = 1.3; // value not critical.. it's just 'reserve'
   requested_indexes.reserve(num_frames + wiggle_room * clat.NumStates());
 
-  if (opts_.criterion == "mmi") { // need numerator probabilities...
+  if (opts.criterion == "mmi") { // need numerator probabilities...
     for (int32 t = 0; t < num_frames; t++) {
       int32 tid = num_ali[t], pdf_id = tmodel.TransitionIdToPdf(tid);
       KALDI_ASSERT(pdf_id >= 0 && pdf_id < num_pdfs);
@@ -205,7 +224,7 @@ switch (objective_type) {
 	   num_floored++;
 	 }
 	 int32 pdf_id = requested_indexes[index].second;
-	 BaseFloat pseudo_loglike = Log(post / priors(pdf_id)) * opts_.acoustic_scale;
+	 BaseFloat pseudo_loglike = Log(post / priors(pdf_id)) * opts.acoustic_scale;
 	 answers[index] = pseudo_loglike;
    }
    if (num_floored > 0) {
@@ -215,11 +234,11 @@ switch (objective_type) {
    
    index = 0;
    
-   if (opts_.criterion == "mmi") {
+   if (opts.criterion == "mmi") {
 	 double tot_num_like = 0.0;
 	 for (; index < num_ali.size(); index++)
 	   tot_num_like += answers[index];
-	 stats_->tot_num_objf += eg_weight * tot_num_like;
+	 stats->tot_num_objf += eg_weight * tot_num_like;
    }
    
    // Now put the (scaled) acoustic log-likelihoods in the lattice.
@@ -244,7 +263,7 @@ switch (objective_type) {
 
 	// Get the MPE or MMI posteriors.
 	Posterior post;
-	stats_->tot_den_objf += eg_weight * GetDiscriminativePosteriors(opts,am_nnet,tmodel,supervision,clat,num_ali,&post);
+	stats->tot_den_objf += eg_weight * GetDiscriminativePosteriors(opts,am_nnet,tmodel,supervision,clat,num_ali,&post);
 	ScalePosterior(eg_weight, &post);
 	double tot_num_post = 0.0, tot_den_post = 0.0;
 	  std::vector<MatrixElement<BaseFloat> > sv_labels;
@@ -260,7 +279,7 @@ switch (objective_type) {
 		  sv_labels.push_back(elem);
 		}
 	  }
-	  stats_->tot_num_count += tot_num_post;
+	  stats->tot_num_count += tot_num_post;
 	    CuMatrix<BaseFloat> output_deriv;
 	    output_deriv.Resize(output.NumRows(), output.NumCols()); // zeroes it.
 	  {  
@@ -287,7 +306,13 @@ switch (objective_type) {
 
 
 
-double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,const AmNnetSimple &am_nnet,const TransitionModel &tmodel,const GeneralMatrix &supervision, Lattice clat,std::vector<int32> num_ali,Posterior *post) {
+double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
+                                                const AmNnetSimple &am_nnet,
+                                                const TransitionModel &tmodel,
+                                                const GeneralMatrix &supervision, 
+                                                const Lattice &clat,
+                                                const std::vector<int32> &num_ali,
+                                                Posterior *post) {
 	std::vector<int32> silence_phones;
     if (!SplitStringToIntegers(opts.silence_phones_str, ":", false,
                              &silence_phones)) {
