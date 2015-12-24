@@ -1,4 +1,4 @@
-// nnet3bin/nnet3-get-egs.cc
+// nnet3bin/nnet3-get-egs-per-utt.cc
 
 // Copyright 2012-2015  Johns Hopkins University (author:  Daniel Povey)
 //                2014  Vimal Manohar
@@ -98,7 +98,8 @@ static void ProcessFile(const MatrixBase<BaseFloat> &feats,
       eg.Compress();
       
     std::ostringstream os;
-    os << utt_id << "-" << t;
+    //os << utt_id << "-" << t;
+    os << utt_id;
 
     std::string key = os.str(); // key is <utt_id>-<frame_id>
 
@@ -221,7 +222,8 @@ int main(int argc, char *argv[]) {
           num_err++;
           continue;
         }
-          
+
+        num_frames = feats.NumRows();
         ProcessFile(feats, ivector_feats, pdf_post, key, compress,
                     num_pdfs, left_context, right_context, num_frames,
                     &num_frames_written, &num_egs_written,
