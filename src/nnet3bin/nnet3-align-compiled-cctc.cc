@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
                              &decode_fst);
         }
 
-        DecodableAmNnetSimple nnet_decodable(
+        DecodableNnetCctcSimple nnet_decodable(
             decodable_opts, cctc_trans_model, nnet,
             features, ivector, online_ivectors,
             online_ivector_period);
