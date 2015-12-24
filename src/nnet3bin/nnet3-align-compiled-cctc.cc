@@ -1,4 +1,4 @@
-// nnet2bin/nnet-align-compiled.cc
+// nnet2bin/nnet-align-compiled-cctc.cc
 
 // Copyright 2009-2012  Microsoft Corporation
 //                      Johns Hopkins University (author: Daniel Povey)
@@ -30,6 +30,9 @@
 #include "nnet3/nnet-am-decodable-simple.h"
 #include "lat/kaldi-lattice.h"
 
+#include "ctc/cctc-transition-model.h"
+#include "nnet3/nnet-cctc-decodable-simple.h"
+
 int main(int argc, char *argv[]) {
   try {
     using namespace kaldi;
@@ -41,16 +44,16 @@ int main(int argc, char *argv[]) {
 
     const char *usage =
         "Align features given nnet3 neural net model\n"
-        "Usage:   nnet3-align-compiled [options] <nnet-in> <graphs-rspecifier> <features-rspecifier> <alignments-wspecifier>\n"
+        "Usage:   nnet3-align-compiled [options] <ctc-nnet-in> <nnet-in> <graphs-rspecifier> <features-rspecifier> <alignments-wspecifier>\n"
         "e.g.: \n"
-        " nnet3-align-compiled 1.mdl ark:graphs.fsts scp:train.scp ark:1.ali\n"
+        " nnet3-align-compiled 1.mdl 2.mdl ark:graphs.fsts scp:train.scp ark:1.ali\n"
         "or:\n"
         " compile-train-graphs tree 1.mdl lex.fst ark:train.tra b, ark:- | \\\n"
-        "   nnet3-align-compiled 1.mdl ark:- scp:train.scp t, ark:1.ali\n";
+        "   nnet3-align-compiled 1.mdl 2.mdl ark:- scp:train.scp t, ark:1.ali\n";
 
     ParseOptions po(usage);
     AlignConfig align_config;
-    DecodableAmNnetSimpleOptions decodable_opts;
+    DecodableNnetCctcSimpleOptions decodable_opts;
     std::string use_gpu = "yes";
     BaseFloat acoustic_scale = 1.0;
     BaseFloat transition_scale = 1.0;
@@ -80,29 +83,33 @@ int main(int argc, char *argv[]) {
                 "option");
     po.Read(argc, argv);
 
-    if (po.NumArgs() < 4 || po.NumArgs() > 5) {
+    if (po.NumArgs() < 5 || po.NumArgs() > 6) {
       po.PrintUsage();
       exit(1);
     }
 
-    std::string model_in_filename = po.GetArg(1),
-        fst_rspecifier = po.GetArg(2),
-        feature_rspecifier = po.GetArg(3),
-        alignment_wspecifier = po.GetArg(4),
-        scores_wspecifier = po.GetOptArg(5);
+    std::string cctc_model_in_filename = po.GetArg(1),
+        model_in_filename = po.GetArg(2),
+        fst_rspecifier = po.GetArg(3),
+        feature_rspecifier = po.GetArg(4),
+        alignment_wspecifier = po.GetArg(5),
+        scores_wspecifier = po.GetOptArg(6);
 
     int num_done = 0, num_err = 0, num_retry = 0;
     double tot_like = 0.0;
     kaldi::int64 frame_count = 0;
 
     {
+      ctc::CctcTransitionModel cctc_trans_model;
       TransitionModel trans_model;
-      AmNnetSimple am_nnet;
+      Nnet nnet;
       {
         bool binary;
+        Input ki_cctc(cctc_model_in_filename, &binary);
         Input ki(model_in_filename, &binary);
+        cctc_trans_model.Read(ki_cctc.Stream(), binary);
         trans_model.Read(ki.Stream(), binary);
-        am_nnet.Read(ki.Stream(), binary);
+        nnet.Read(ki_cctc.Stream(), binary);
       }
 
       RandomAccessBaseFloatMatrixReader online_ivector_reader(
@@ -165,7 +172,7 @@ int main(int argc, char *argv[]) {
         }
 
         DecodableAmNnetSimple nnet_decodable(
-            decodable_opts, trans_model, am_nnet,
+            decodable_opts, cctc_trans_model, nnet,
             features, ivector, online_ivectors,
             online_ivector_period);
 
