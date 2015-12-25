@@ -140,8 +140,8 @@ class NnetTrainerDiscriminative {
  private:
   void ProcessOutputs(const NnetExample &eg, const Lattice &clat, 
                             const std::vector<int32> &num_ali, NnetComputer *computer);
-  const NnetTrainerOptions opts_;
-  const AmNnetSimple am_nnet_;
+  const NnetTrainerOptions &opts_;
+  const AmNnetSimple &am_nnet_;
   const TransitionModel &tmodel_;
   
   Nnet *nnet_;
