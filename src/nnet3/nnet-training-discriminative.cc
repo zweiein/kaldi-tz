@@ -73,7 +73,7 @@ void NnetTrainerDiscriminative::Train(const NnetExample &eg,
   // give the inputs to the computer object.
   computer.AcceptInputs(*nnet_, eg.io);
   computer.Forward();
-  this->ProcessOutputs(stats_, opts_, am_nnet_, tmodel_, eg, clat, num_ali, &computer);
+  this->ProcessOutputs(eg, clat, num_ali, &computer);
   computer.Backward();
 
   if (delta_nnet_ != NULL) {
@@ -129,12 +129,12 @@ void NnetTrainerDiscriminative::ProcessOutputs(const NnetExample &eg, const Latt
 NnetTrainerDiscriminative::~NnetTrainerDiscriminative() {
   delete delta_nnet_;
 }
-void LatticeComputations(NnetDiscriminativeStats *stats, 
+void LatticeComputations (NnetDiscriminativeStats *stats, 
                                   ObjectiveType objective_type,
                                   const NnetTrainerOptions &opts,
                                   const AmNnetSimple &am_nnet,
                                   const TransitionModel &tmodel,
-                                  const Lattice &clat,
+                                  const Lattice &lat,
                                   const std::vector<int32> &num_ali,
                                   const GeneralMatrix &supervision,
                                   const std::string &output_name,
@@ -144,13 +144,20 @@ void LatticeComputations(NnetDiscriminativeStats *stats,
                                   BaseFloat *tot_objf) {
 
  BaseFloat eg_weight = 1;
- const NnetExample eg_;
- std::vector<int32> silence_phones = opts.silence_phones_str;
+ Lattice clat = lat;
+ std::vector<int32> silence_phones; // derived from opts.silence_phones_str
+   if (!SplitStringToIntegers(opts.silence_phones_str, ":", false,
+                             &silence_phones)) {
+    KALDI_ERR << "Bad value for --silence-phones option: "
+              << opts.silence_phones_str;
+   }
+ 
  const CuMatrixBase<BaseFloat> &output = computer->GetOutput(output_name);
  if (output.NumCols() != supervision.NumCols())
     KALDI_ERR << "Nnet versus example output dimension (num-classes) "
               << "mismatch for '" << output_name << "': " << output.NumCols()
               << " (nnet) vs. " << supervision.NumCols() << " (egs)\n";
+ 
  switch (objective_type) {
 	case kMpe: {
   if (opts.criterion == "mmi" && opts.boost != 0.0) {
@@ -166,8 +173,8 @@ void LatticeComputations(NnetDiscriminativeStats *stats,
   const CuMatrixBase<BaseFloat> &posteriors = output;
   KALDI_ASSERT(posteriors.NumRows() == num_frames);
   int32 num_pdfs = posteriors.NumCols();
-
   KALDI_ASSERT(num_pdfs == priors.Dim());
+  
   typedef LatticeArc Arc;
   typedef Arc::StateId StateId;
   
@@ -318,7 +325,7 @@ double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
                              &silence_phones)) {
     KALDI_ERR << "Bad value for --silence-phones option: "
               << opts.silence_phones_str;
-  } 
+    } 
   if (opts.criterion == "mpfe" || opts.criterion == "smbr") {
     Posterior tid_post;
     double ans;

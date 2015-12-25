@@ -27,6 +27,7 @@
 #include "nnet3/nnet-optimize.h"
 #include "nnet3/nnet-example-utils.h"
 #include "hmm/transition-model.h"
+#include "lat/kaldi-lattice.h"
 
 namespace kaldi {
 namespace nnet3 {
@@ -132,25 +133,24 @@ class NnetTrainerDiscriminative {
                                         Nnet *nnet, 
                                         NnetDiscriminativeStats *stats);
 
-  void Train (const NnetExample &eg, Lattice clat, std::vector<int32> num_ali);
+  void Train (const NnetExample &eg, const Lattice &clat, const std::vector<int32> &num_ali);
 
   ~NnetTrainerDiscriminative ();
   
  private:
   void ProcessOutputs(const NnetExample &eg, const Lattice &clat, 
                             const std::vector<int32> &num_ali, NnetComputer *computer);
-  typedef LatticeArc Arc;
-  typedef Arc::StateId StateId;
   const NnetTrainerOptions opts_;
   const AmNnetSimple am_nnet_;
-  const TransitionModel tmodel_;
+  const TransitionModel &tmodel_;
   
-  NnetDiscriminativeStats *stats_; // the objective function, etc. 
   Nnet *nnet_;
   Nnet *delta_nnet_;  // Only used if momentum != 0.0.  nnet representing
                       // accumulated parameter-change (we'd call this
                       // gradient_nnet_, but due to natural-gradient update,
                       // it's better to consider it as a delta-parameter nnet.
+  NnetDiscriminativeStats *stats_; // the objective function, etc. 
+  
   
   std::vector<int32> silence_phones_;
   CachingOptimizingCompiler compiler_;

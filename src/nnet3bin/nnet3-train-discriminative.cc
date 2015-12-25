@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
 
     bool ok;
     {
-      NnetTrainerDiscriminative trainer(train_config, am_nnet, trans_model, nnet, stats);
+      NnetTrainerDiscriminative trainer(train_config, am_nnet, trans_model, &nnet, &stats);
       SequentialLatticeReader clat_reader(clat_rspecifier);
 	  RandomAccessInt32VectorReader ref_ali_reader(ref_ali_rspecifier);
 	  SequentialNnetExampleReader example_reader(examples_rspecifier);
