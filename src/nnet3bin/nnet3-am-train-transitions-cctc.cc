@@ -1,4 +1,4 @@
-// nnet3bin/nnet3-am-train-transitions.cc
+// nnet3bin/nnet3-am-train-transitions-cctc.cc
 
 // Copyright 2012-2015  Johns Hopkins University (author:  Daniel Povey)
 
@@ -29,8 +29,8 @@ void SetPriors(const TransitionModel &tmodel,
                const Vector<double> &transition_accs,
                double prior_floor,
                AmNnetSimple *am_nnet) {
-  KALDI_ASSERT(tmodel.NumPdfs() == am_nnet->NumPdfs());
-  Vector<BaseFloat> pdf_counts(tmodel.NumPdfs());
+  //KALDI_ASSERT(tmodel.NumPdfs() == am_nnet->NumPdfs());
+  Vector<BaseFloat> pdf_counts(am_nnet->NumPdfs(), kSetZero);
   KALDI_ASSERT(transition_accs(0) == 0.0); // There is
   // no zero transition-id.
   for (int32 tid = 1; tid < transition_accs.Dim(); tid++) {
@@ -59,9 +59,9 @@ int main(int argc, char *argv[]) {
     const char *usage =
         "Train the transition probabilities of an nnet3 neural network acoustic model\n"
         "\n"
-        "Usage:  nnet3-am-train-transitions [options] <nnet-in> <alignments-rspecifier> <nnet-out>\n"
+        "Usage:  nnet3-am-train-transitions-cctc [options] <nnet-in> <alignments-rspecifier> <nnet-out>\n"
         "e.g.:\n"
-        " nnet3-am-train-transitions 1.nnet \"ark:gunzip -c ali.*.gz|\" 2.nnet\n";
+        " nnet3-am-train-transitions-cctc 1.nnet \"ark:gunzip -c ali.*.gz|\" 2.nnet\n";
     
     bool binary_write = true;
     bool set_priors = true; // Also set the per-pdf priors in the model.
