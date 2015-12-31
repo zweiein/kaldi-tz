@@ -29,8 +29,8 @@ for x in `seq 5`; do
   [ "$1" == "--self-loop-scale" ] && loopscale=$2 && shift 2;
 done
 
-if [ $# != 3 ]; then
-   echo "Usage: utils/mkgraph.sh [options] <lang-dir> <model-dir> <graphdir>"
+if [ $# != 4 ]; then
+   echo "Usage: utils/mkgraph.sh [options] <lm> <lang-dir> <model-dir> <graphdir>"
    echo "e.g.: utils/mkgraph.sh data/lang_test exp/tri1/ exp/tri1/graph"
    echo " Options:"
    echo " --mono          #  For monophone models."
@@ -40,10 +40,11 @@ fi
 
 if [ -f path.sh ]; then . ./path.sh; fi
 
-lang=$1
-tree=$2/tree
-model=$2/final.mdl
-dir=$3
+lm=$1 #it's an arpa
+lang=$2
+tree=$3/tree
+model=$3/final.mdl
+dir=$4
 
 mkdir -p $dir
 
@@ -51,43 +52,68 @@ mkdir -p $dir
 # (note: the [[ ]] brackets make the || type operators work (inside [ ], we
 # would have to use -o instead),  -f means file exists, and -ot means older than).
 
-required="$lang/L.fst $lang/G.fst $lang/phones.txt $lang/words.txt $lang/phones/silence.csl $lang/phones/disambig.int $model $tree"
+required="$lm $lang/phones.txt $lang/words.txt $lang/phones/silence.csl $lang/phones/disambig.int $model $tree"
 for f in $required; do
   [ ! -f $f ] && echo "mkgraph.sh: expected $f to exist" && exit 1;
 done
 
-mkdir -p $lang/tmp
 # Note: [[ ]] is like [ ] but enables certain extra constructs, e.g. || in 
 # place of -o
-if [[ ! -s $lang/tmp/LG.fst || $lang/tmp/LG.fst -ot $lang/G.fst || \
-      $lang/tmp/LG.fst -ot $lang/L_disambig.fst ]]; then
-  fsttablecompose $lang/L_disambig.fst $lang/G.fst | fstdeterminizestar --use-log=true | \
-    fstminimizeencoded | fstarcsort --sort_type=ilabel > $lang/tmp/LG.fst || exit 1;
-  fstisstochastic $lang/tmp/LG.fst || echo "[info]: LG not stochastic."
+#if [[ ! -s $lang/tmp/LG.fst || $lang/tmp/LG.fst -ot $lang/G.fst || \
+#      $lang/tmp/LG.fst -ot $lang/L_disambig.fst ]]; then
+#  fsttablecompose $lang/L_disambig.fst $lang/G.fst | fstdeterminizestar --use-log=true | \
+#    fstminimizeencoded | fstpushspecial | \
+#    fstarcsort --sort_type=ilabel > $lang/tmp/LG.fst || exit 1;
+#  fstisstochastic $lang/tmp/LG.fst || echo "[info]: LG not stochastic."
+#fi
+
+
+cp $lang/words.txt $dir || exit 1;
+
+gunzip -c $lm | \
+  utils/find_arpa_oovs.pl $dir/words.txt  > $dir/oovs.txt
+
+if [ ! -s $dir/G.fst ]; then
+  gunzip -c $lm | \
+    grep -v '<s> <s>' | \
+    grep -v '</s> <s>' | \
+    grep -v '</s> </s>' | \
+    arpa2fst - | fstprint | \
+    utils/remove_oovs.pl $dir/oovs.txt | \
+      utils/eps2disambig.pl | utils/s2eps.pl | fstcompile --isymbols=$dir/words.txt \
+        --osymbols=$dir/words.txt  --keep_isymbols=false --keep_osymbols=false | \
+        fstrmepsilon | fstarcsort --sort_type=ilabel > $dir/G.fst
+fi
+
+if [ ! -s $dir/LG.fst ]; then
+  fsttablecompose $lang/L_disambig.fst $dir/G.fst | fstdeterminizestar --use-log=true | \
+    fstminimizeencoded | fstarcsort --sort_type=ilabel > $dir/LG.fst || exit 1;
 fi
 
 
-clg=$lang/tmp/CLG_${N}_${P}.fst
+mkdir -p $dir/tmp
 
-if [[ ! -s $clg || $clg -ot $lang/tmp/LG.fst ]]; then
+clg=$dir/tmp/CLG_${N}_${P}.fst
+
+if [[ ! -s $clg || $clg -ot $model ]]; then
   fstcomposecontext --context-size=$N --central-position=$P \
    --read-disambig-syms=$lang/phones/disambig.int \
-   --write-disambig-syms=$lang/tmp/disambig_ilabels_${N}_${P}.int \
-    $lang/tmp/ilabels_${N}_${P} < $lang/tmp/LG.fst |\
+   --write-disambig-syms=$dir/tmp/disambig_ilabels_${N}_${P}.int \
+    $dir/tmp/ilabels_${N}_${P} < $dir/LG.fst |\
     fstarcsort --sort_type=ilabel > $clg
   fstisstochastic $clg  || echo "[info]: CLG not stochastic."
 fi
 
 if [[ ! -s $dir/Ha.fst || $dir/Ha.fst -ot $model  \
-    || $dir/Ha.fst -ot $lang/tmp/ilabels_${N}_${P} ]]; then
+    || $dir/Ha.fst -ot $dir/tmp/ilabels_${N}_${P} ]]; then
   if $reverse; then
     make-h-transducer --reverse=true --push_weights=true \
       --disambig-syms-out=$dir/disambig_tid.int \
-      --transition-scale=$tscale $lang/tmp/ilabels_${N}_${P} $tree $model \
+      --transition-scale=$tscale $dir/tmp/ilabels_${N}_${P} $tree $model \
       > $dir/Ha.fst  || exit 1;
   else
     make-h-transducer --disambig-syms-out=$dir/disambig_tid.int \
-      --transition-scale=$tscale $lang/tmp/ilabels_${N}_${P} $tree $model \
+      --transition-scale=$tscale $dir/tmp/ilabels_${N}_${P} $tree $model \
        > $dir/Ha.fst  || exit 1;
   fi
 fi
