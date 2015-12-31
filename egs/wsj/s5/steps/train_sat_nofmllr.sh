@@ -90,36 +90,36 @@ echo "$0: feature type is $feat_type"
 
 ## Set up speaker-independent features.
 case $feat_type in
-  delta) sifeats="ark,s,cs:apply-cmvn $cmvn_opts --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp scp:$sdata/JOB/feats.scp ark:- | add-deltas $delta_opts ark:- ark:- |";;
-  lda) sifeats="ark,s,cs:apply-cmvn $cmvn_opts --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp scp:$sdata/JOB/feats.scp ark:- | splice-feats $splice_opts ark:- ark:- | transform-feats $alidir/final.mat ark:- ark:- |"
+  delta) feats="ark,s,cs:apply-cmvn $cmvn_opts --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp scp:$sdata/JOB/feats.scp ark:- | add-deltas $delta_opts ark:- ark:- |";;
+  lda) feats="ark,s,cs:apply-cmvn $cmvn_opts --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp scp:$sdata/JOB/feats.scp ark:- | splice-feats $splice_opts ark:- ark:- | transform-feats $alidir/final.mat ark:- ark:- |"
     cp $alidir/final.mat $dir
     cp $alidir/full.mat $dir 2>/dev/null
     ;;
   *) echo "$0: invalid feature type $feat_type" && exit 1;
 esac
 
-## Get initial fMLLR transforms (possibly from alignment dir)
-if [ -f $alidir/trans.1 ]; then
-  echo "$0: Using transforms from $alidir"
-  feats="$sifeats transform-feats --utt2spk=ark:$sdata/JOB/utt2spk ark,s,cs:$alidir/trans.JOB ark:- ark:- |"
-  cur_trans_dir=$alidir
-else
-  if [ $stage -le -5 ]; then
-    echo "$0: obtaining initial fMLLR transforms since not present in $alidir"
-    # The next line is necessary because of $silphonelist otherwise being incorrect; would require
-    # old $lang dir which would require another option.  Not needed anyway.
-    [ ! -z "$phone_map" ] && \
-       echo "$0: error: you must provide transforms if you use the --phone-map option." && exit 1;
-    $cmd JOB=1:$nj $dir/log/fmllr.0.JOB.log \
-      ali-to-post "ark:gunzip -c $alidir/ali.JOB.gz|" ark:- \| \
-      weight-silence-post $silence_weight $silphonelist $alidir/final.mdl ark:- ark:- \| \
-      gmm-est-fmllr --fmllr-update-type=$fmllr_update_type \
-      --spk2utt=ark:$sdata/JOB/spk2utt $alidir/final.mdl "$sifeats" \
-      ark:- ark:$dir/trans.JOB || exit 1;
-  fi
-  feats="$sifeats transform-feats --utt2spk=ark:$sdata/JOB/utt2spk ark,s,cs:$dir/trans.JOB ark:- ark:- |"
-  cur_trans_dir=$dir
-fi
+### Get initial fMLLR transforms (possibly from alignment dir)
+#if [ -f $alidir/trans.1 ]; then
+#  echo "$0: Using transforms from $alidir"
+#  feats="$sifeats transform-feats --utt2spk=ark:$sdata/JOB/utt2spk ark,s,cs:$alidir/trans.JOB ark:- ark:- |"
+#  cur_trans_dir=$alidir
+#else
+#  if [ $stage -le -5 ]; then
+#    echo "$0: obtaining initial fMLLR transforms since not present in $alidir"
+#    # The next line is necessary because of $silphonelist otherwise being incorrect; would require
+#    # old $lang dir which would require another option.  Not needed anyway.
+#    [ ! -z "$phone_map" ] && \
+#       echo "$0: error: you must provide transforms if you use the --phone-map option." && exit 1;
+#    $cmd JOB=1:$nj $dir/log/fmllr.0.JOB.log \
+#      ali-to-post "ark:gunzip -c $alidir/ali.JOB.gz|" ark:- \| \
+#      weight-silence-post $silence_weight $silphonelist $alidir/final.mdl ark:- ark:- \| \
+#      gmm-est-fmllr --fmllr-update-type=$fmllr_update_type \
+#      --spk2utt=ark:$sdata/JOB/spk2utt $alidir/final.mdl "$sifeats" \
+#      ark:- ark:$dir/trans.JOB || exit 1;
+#  fi
+#  feats="$sifeats transform-feats --utt2spk=ark:$sdata/JOB/utt2spk ark,s,cs:$dir/trans.JOB ark:- ark:- |"
+#  cur_trans_dir=$dir
+#fi
 
 if [ $stage -le -4 ] && $train_tree; then
   # Get tree stats.
@@ -192,28 +192,28 @@ while [ $x -lt $num_iters ]; do
       "ark:|gzip -c >$dir/ali.JOB.gz" || exit 1;
   fi
 
-  if echo $fmllr_iters | grep -w $x >/dev/null; then
-    if [ $stage -le $x ]; then
-      echo Estimating fMLLR transforms
-      # We estimate a transform that's additional to the previous transform;
-      # we'll compose them.
-      $cmd JOB=1:$nj $dir/log/fmllr.$x.JOB.log \
-        ali-to-post "ark:gunzip -c $dir/ali.JOB.gz|" ark:-  \| \
-        weight-silence-post $silence_weight $silphonelist $dir/$x.mdl ark:- ark:- \| \
-        gmm-est-fmllr --fmllr-update-type=$fmllr_update_type \
-        --spk2utt=ark:$sdata/JOB/spk2utt $dir/$x.mdl \
-        "$feats" ark:- ark:$dir/tmp_trans.JOB || exit 1;
-      for n in `seq $nj`; do
-        ! ( compose-transforms --b-is-affine=true \
-          ark:$dir/tmp_trans.$n ark:$cur_trans_dir/trans.$n ark:$dir/composed_trans.$n \
-          && mv $dir/composed_trans.$n $dir/trans.$n && \
-          rm $dir/tmp_trans.$n ) 2>$dir/log/compose_transforms.$x.log \
-          && echo "$0: Error composing transforms" && exit 1;
-      done
-    fi
-    feats="$sifeats transform-feats --utt2spk=ark:$sdata/JOB/utt2spk ark:$dir/trans.JOB ark:- ark:- |"
-    cur_trans_dir=$dir
-  fi
+#  if echo $fmllr_iters | grep -w $x >/dev/null; then
+#    if [ $stage -le $x ]; then
+#      echo Estimating fMLLR transforms
+#      # We estimate a transform that's additional to the previous transform;
+#      # we'll compose them.
+#      $cmd JOB=1:$nj $dir/log/fmllr.$x.JOB.log \
+#        ali-to-post "ark:gunzip -c $dir/ali.JOB.gz|" ark:-  \| \
+#        weight-silence-post $silence_weight $silphonelist $dir/$x.mdl ark:- ark:- \| \
+#        gmm-est-fmllr --fmllr-update-type=$fmllr_update_type \
+#        --spk2utt=ark:$sdata/JOB/spk2utt $dir/$x.mdl \
+#        "$feats" ark:- ark:$dir/tmp_trans.JOB || exit 1;
+#      for n in `seq $nj`; do
+#        ! ( compose-transforms --b-is-affine=true \
+#          ark:$dir/tmp_trans.$n ark:$cur_trans_dir/trans.$n ark:$dir/composed_trans.$n \
+#          && mv $dir/composed_trans.$n $dir/trans.$n && \
+#          rm $dir/tmp_trans.$n ) 2>$dir/log/compose_transforms.$x.log \
+#          && echo "$0: Error composing transforms" && exit 1;
+#      done
+#    fi
+#    feats="$sifeats transform-feats --utt2spk=ark:$sdata/JOB/utt2spk ark:$dir/trans.JOB ark:- ark:- |"
+#    cur_trans_dir=$dir
+#  fi
 
   if [ $stage -le $x ]; then
     $cmd JOB=1:$nj $dir/log/acc.$x.JOB.log \
@@ -237,7 +237,7 @@ if [ $stage -le $x ]; then
   # with the final speaker-adapted model.
   $cmd JOB=1:$nj $dir/log/acc_alimdl.JOB.log \
     ali-to-post "ark:gunzip -c $dir/ali.JOB.gz|" ark:-  \| \
-    gmm-acc-stats-twofeats $dir/$x.mdl "$feats" "$sifeats" \
+    gmm-acc-stats $dir/$x.mdl "$feats" \
     ark,s,cs:- $dir/$x.JOB.acc || exit 1;
   [ `ls $dir/$x.*.acc | wc -w` -ne "$nj" ] && echo "$0: Wrong #accs" && exit 1;
   # Update model.
