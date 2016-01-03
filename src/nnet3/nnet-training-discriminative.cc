@@ -294,7 +294,6 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 		// computed the objective function.
 		BaseFloat tot_objf, tot_weight;
 		output_deriv.CompObjfAndDeriv(sv_labels, CuMatrix<BaseFloat>(output), &tot_objf, &tot_weight);
-		KALDI_LOG<<"diff:"<<output_deriv;
 		if (supply_deriv)
               computer->AcceptOutputDeriv(output_name, &output_deriv);
 		break;
