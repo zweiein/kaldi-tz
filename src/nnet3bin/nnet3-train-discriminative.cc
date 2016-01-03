@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
       for (; !example_reader.Done() && !clat_reader.Done(); example_reader.Next(), clat_reader.Next()) {
           std::string utt = example_reader.Key();
           KALDI_LOG << "utterance: " <<utt;
-          if (clat_reader.Key() != utt) || !ref_ali_reader.HasKey(utt)) {
+          if (clat_reader.Key() != utt || !ref_ali_reader.HasKey(utt)) {
             continue;
           }
           Lattice clat = clat_reader.Value();
