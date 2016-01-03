@@ -332,8 +332,8 @@ double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
                                             num_ali, opts.criterion,
                                             opts.one_silence_class,
                                             &tid_post);
-	KALDI_LOG<<"silence_phones:"<<opts.silence_phones_str;
-	KALDI_LOG<<"opts.one_silence_class:"<<opts.one_silence_class;
+	//KALDI_LOG<<"silence_phones:"<<opts.silence_phones_str;
+	//KALDI_LOG<<"opts.one_silence_class:"<<opts.one_silence_class;
 	//for(int32 i=0; i<num_ali.size(); i++)
 	//	KALDI_LOG<<"i="<<i<<" num_ali:"<<num_ali[i];
 	//WriteLattice(std::cerr, false, clat);
