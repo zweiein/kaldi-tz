@@ -137,13 +137,13 @@ if [ "$post_decode_acwt" == 1.0 ]; then
     [ ! -d $dir/lat$n ] && mkdir $dir/lat$n;
     cat $sdata/$n/feats.scp | awk '{ print $1" | gzip -c >'$dir'/lat'$n'/"$1".gz"; }'
   done >$dir/lat.store_separately_as_gz.scp
-  lat_wspecifier="$dir/lat.store_separately_as_gz.scp"
+  lat_wspecifier="scp:$dir/lat.store_separately_as_gz.scp"
 else
   for n in `seq $nj`; do
     [ ! -d $dir/lat$n ] && mkdir $dir/lat$n;
     cat $sdata/$n/feats.scp | awk '{ print $1" ark:|lattice-scale --acoustic-scale='$post_decode_acwt' ark:- ark:- | gzip -c >'$dir'/lat'$n'/"$1".gz"; }'
   done >$dir/lat.store_separately_as_gz.scp
-  lat_wspecifier="$dir/lat.store_separately_as_gz.scp"
+  lat_wspecifier="scp:$dir/lat.store_separately_as_gz.scp"
   #lat_wspecifier="ark:|lattice-scale --acoustic-scale=$post_decode_acwt ark:- ark:- | gzip -c >$dir/lat.JOB.gz"
 fi
 
