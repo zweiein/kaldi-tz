@@ -25,7 +25,7 @@ iter=final
 num_threads=1 # if >1, will use gmm-latgen-faster-parallel
 parallel_opts=  # ignored now.
 scoring_opts=
-skip_scoring=false
+skip_scoring=true
 feat_type=
 online_ivector_dir=
 minimize=false
@@ -36,8 +36,8 @@ echo "$0 $@"  # Print the command line for logging
 [ -f ./path.sh ] && . ./path.sh; # source the path.
 . parse_options.sh || exit 1;
 
-if [ $# -ne 3 ]; then
-  echo "Usage: $0 [options] <graph-dir> <data-dir> <decode-dir>"
+if [ $# -ne 4 ]; then
+  echo "Usage: $0 [options] <graph-dir> <data-dir> <model-dir> <lattice-dir>"
   echo "e.g.:   steps/nnet3/decode.sh --nj 8 \\"
   echo "--online-ivector-dir exp/nnet2_online/ivectors_test_eval92 \\"
   echo "    exp/tri4b/graph_bg data/test_eval92_hires $dir/decode_bg_eval92"
@@ -57,8 +57,8 @@ fi
 
 graphdir=$1
 data=$2
-dir=$3
-srcdir=`dirname $dir`; # Assume model directory one level up from decoding directory.
+srcdir=$3
+dir=$4
 model=$srcdir/$iter.mdl
 
 
@@ -131,10 +131,20 @@ if [ ! -z "$online_ivector_dir" ]; then
   ivector_opts="--online-ivectors=scp:$online_ivector_dir/ivector_online.scp --online-ivector-period=$ivector_period"
 fi
 
+# Prepare 'scp' for storing lattices separately and gzipped
 if [ "$post_decode_acwt" == 1.0 ]; then
-  lat_wspecifier="ark|gzip -c >$dir/lat.JOB.gz"
+  for n in `seq $nj`; do
+    [ ! -d $dir/lat$n ] && mkdir $dir/lat$n;
+    cat $sdata/$n/feats.scp | awk '{ print $1" | gzip -c >'$dir'/lat'$n'/"$1".gz"; }'
+  done >$dir/lat.store_separately_as_gz.scp
+  lat_wspecifier="$dir/lat.store_separately_as_gz.scp"
 else
-  lat_wspecifier="ark:|lattice-scale --acoustic-scale=$post_decode_acwt ark:- ark:- | gzip -c >$dir/lat.JOB.gz"
+  for n in `seq $nj`; do
+    [ ! -d $dir/lat$n ] && mkdir $dir/lat$n;
+    cat $sdata/$n/feats.scp | awk '{ print $1" ark:|lattice-scale --acoustic-scale='$post_decode_acwt' ark:- ark:- | gzip -c >'$dir'/lat'$n'/"$1".gz"; }'
+  done >$dir/lat.store_separately_as_gz.scp
+  lat_wspecifier="$dir/lat.store_separately_as_gz.scp"
+  #lat_wspecifier="ark:|lattice-scale --acoustic-scale=$post_decode_acwt ark:- ark:- | gzip -c >$dir/lat.JOB.gz"
 fi
 
 if [ -f $srcdir/frame_subsampling_factor ]; then
@@ -152,18 +162,10 @@ if [ $stage -le 1 ]; then
      $graphdir/HCLG.fst "$feats" "$lat_wspecifier" || exit 1;
 fi
 
-# The output of this script is the files "lat.*.gz"-- we'll rescore this at
-# different acoustic scales to get the final output.
+#Generate 'scp' for reading the lattices
+for n in `seq $nj`; do
+  find $dir/lat${n} -name "*.gz" | awk -v FS="/" '{ print gensub(".gz","","",$NF)" gunzip -c "$0" |"; }'
+done >$dir/lat.scp
 
-
-if [ $stage -le 2 ]; then
-  if ! $skip_scoring ; then
-    [ ! -x local/score.sh ] && \
-      echo "Not scoring because local/score.sh does not exist or not executable." && exit 1;
-    echo "score best paths"
-    local/score.sh $scoring_opts --cmd "$cmd" $data $graphdir $dir
-    echo "score confidence and timing with sclite"
-  fi
-fi
-echo "Decoding done."
+echo "Generate denlats done."
 exit 0;
