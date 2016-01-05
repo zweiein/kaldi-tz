@@ -132,20 +132,11 @@ if [ ! -z "$online_ivector_dir" ]; then
 fi
 
 # Prepare 'scp' for storing lattices separately and gzipped
-if [ "$post_decode_acwt" == 1.0 ]; then
-  for n in `seq $nj`; do
-    [ ! -d $dir/lat$n ] && mkdir $dir/lat$n;
-    cat $sdata/$n/feats.scp | awk '{ print $1" | gzip -c >'$dir'/lat'$n'/"$1".gz"; }'
-  done >$dir/lat.store_separately_as_gz.scp
-  lat_wspecifier="scp:$dir/lat.store_separately_as_gz.scp"
-else
-  for n in `seq $nj`; do
-    [ ! -d $dir/lat$n ] && mkdir $dir/lat$n;
-    cat $sdata/$n/feats.scp | awk '{ print $1" ark:|lattice-scale --acoustic-scale='$post_decode_acwt' ark:- ark:- | gzip -c >'$dir'/lat'$n'/"$1".gz"; }'
-  done >$dir/lat.store_separately_as_gz.scp
-  lat_wspecifier="scp:$dir/lat.store_separately_as_gz.scp"
-  #lat_wspecifier="ark:|lattice-scale --acoustic-scale=$post_decode_acwt ark:- ark:- | gzip -c >$dir/lat.JOB.gz"
-fi
+for n in `seq $nj`; do
+  [ ! -d $dir/lat$n ] && mkdir $dir/lat$n;
+  cat $sdata/$n/feats.scp | awk '{ print $1" | gzip -c >'$dir'/lat'$n'/"$1".gz"; }'
+done >$dir/lat.store_separately_as_gz.scp
+lat_wspecifier="$dir/lat.store_separately_as_gz.scp"
 
 if [ -f $srcdir/frame_subsampling_factor ]; then
   # e.g. for 'chain' systems
@@ -159,7 +150,7 @@ if [ $stage -le 1 ]; then
      --minimize=$minimize --max-active=$max_active --min-active=$min_active --beam=$beam \
      --lattice-beam=$lattice_beam --acoustic-scale=$acwt --allow-partial=true \
      --word-symbol-table=$graphdir/words.txt "$model" \
-     $graphdir/HCLG.fst "$feats" "$lat_wspecifier" || exit 1;
+     $graphdir/HCLG.fst "$feats" "ark:|lattice-scale --acoustic-scale=$post_decode_acwt ark:- scp:$lat_wspecifier" || exit 1;
 fi
 
 #Generate 'scp' for reading the lattices
