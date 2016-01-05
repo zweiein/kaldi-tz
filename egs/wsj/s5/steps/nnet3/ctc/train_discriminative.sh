@@ -110,7 +110,8 @@ for f in $data/feats.scp $lang/L.fst $alidir/ali.1.gz $alidir/num_jobs $alidir/t
          $denlatdir/num_jobs $src_model $extra_files; do
   [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
-nj=$(cat $alidir/num_jobs) || exit 1; # caution: $nj is the number of
+nj=$(cat $denlatdir/num_jobs) || exit 1;
+#nj=$(cat $alidir/num_jobs) || exit 1; # caution: $nj is the number of
                                       # splits of the denlats and alignments, but
                                       # num_jobs_nnet is the number of nnet training
                                       # jobs we run in parallel.
