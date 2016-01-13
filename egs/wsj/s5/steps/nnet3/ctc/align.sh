@@ -119,11 +119,10 @@ echo "$0: aligning data in $data using model from $srcdir, putting alignments in
 tra="ark:utils/sym2int.pl --map-oov $oov -f 2- $lang/words.txt $sdata/JOB/text|";
 
 $cmd JOB=1:$nj $dir/log/align.JOB.log \
-  compile-train-graphs $dir/tree $srcdir/${iter}.mdl  $lang/L.fst "$tra" ark:- \| \
-  nnet3-align-compiled $scale_opts $ivector_opts \
+  compile-train-graphs-cctc $dir/tree $srcdir/${iter}.mdl  $lang/L.fst "$tra" ark:- \| \
+  nnet3-align-compiled-cctc $scale_opts $ivector_opts \
     --use-gpu=$use_gpu --beam=$beam --retry-beam=$retry_beam \
     $srcdir/${iter}.mdl ark:- "$feats" "ark:|gzip -c >$dir/ali.JOB.gz" || exit 1;
 
 echo "$0: done aligning data."
-
 
