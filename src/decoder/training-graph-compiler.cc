@@ -309,9 +309,10 @@ bool TrainingGraphCompilerCctc::CompileGraph(const fst::VectorFst<fst::StdArc> &
   // TableCompose more efficient than compose.
   TableCompose(*lex_fst_, word_fst, &phone2word_fst, &lex_cache_);
 
-  KALDI_ASSERT(phone2word_fst.Start() != kNoStateId);
+  KALDI_ASSERT(phone2word_fst.Start() != kNoStateId);  
+  const VectorFst<StdArc> phone2word_fst_tmp;
   ctc::CreateCctcDecodingFst(trans_model_, phone_lm_weight_,
-                               phone2word_fst, out_fst);
+                               phone2word_fst_tmp, out_fst);
   
 
   /* ContextFst<StdArc> *cfst = NULL;
@@ -428,8 +429,9 @@ bool TrainingGraphCompilerCctc::CompileGraphs(
 
     KALDI_ASSERT(phone2word_fst.Start() != kNoStateId &&
                  "Perhaps you have words missing in your lexicon?");
+    const VectorFst<StdArc> phone2word_fst_tmp;
     ctc::CreateCctcDecodingFst(trans_model_, phone_lm_weight_,
-                               phone2word_fst, (*out_fsts)[i] );
+                               phone2word_fst_tmp, (*out_fsts)[i] );
    
     /* VectorFst<StdArc> ctx2word_fst;
     ComposeContextFst(*cfst, phone2word_fst, &ctx2word_fst);
