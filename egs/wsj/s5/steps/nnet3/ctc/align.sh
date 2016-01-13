@@ -126,3 +126,4 @@ $cmd JOB=1:$nj $dir/log/align.JOB.log \
 
 echo "$0: done aligning data."
 
+
