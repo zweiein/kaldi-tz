@@ -50,11 +50,11 @@ sdata=$data/split$nj
 extra_files=
 [ ! -z "$online_ivector_dir" ] && \
   extra_files="$online_ivector_dir/ivector_online.scp $online_ivector_dir/ivector_period"
-for f in $srcdir/tree $srcdir/${iter}.mdl $srcdir/${iter}.mdl.nnet3am $data/feats.scp $lang/L.fst $extra_files; do
+for f in $srcdir/tree $srcdir/${iter}.mdl $data/feats.scp $lang/L.fst $extra_files; do
   [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
 
-cp $srcdir/{tree,${iter}.mdl,${iter}.mdl.nnet3am} $dir || exit 1;
+cp $srcdir/{tree,${iter}.mdl} $dir || exit 1;
 
 
 ## Set up features.  Note: these are different from the normal features
@@ -118,20 +118,11 @@ echo "$0: aligning data in $data using model from $srcdir, putting alignments in
 
 tra="ark:utils/sym2int.pl --map-oov $oov -f 2- $lang/words.txt $sdata/JOB/text|";
 
-## neglect 3-gram context monophones which are treated as a language model
-#$cmd JOB=1:$nj $dir/log/align.JOB.log \
-#  compile-train-graphs $dir/tree $srcdir/${iter}.mdl.nnet3am  $lang/L.fst "$tra" ark:- \| \
-#  nnet3-align-compiled $scale_opts $ivector_opts \
-#    --beam=$beam --retry-beam=$retry_beam \
-#    $srcdir/${iter}.mdl.nnet3am ark:- "$feats" "ark:|gzip -c >$dir/ali.JOB.gz" || exit 1;
-
-
-# consider the 3-gram context monophone lm, compile-train-graphs-cctc not realised, using compile-train-graphs for simple
 $cmd JOB=1:$nj $dir/log/align.JOB.log \
-  compile-train-graphs $dir/tree $srcdir/${iter}.mdl.nnet3am  $lang/L.fst "$tra" ark:- \| \
-  nnet3-align-compiled-cctc $scale_opts $ivector_opts \
-    --beam=$beam --retry-beam=$retry_beam \
-    $srcdir/${iter}.mdl $srcdir/${iter}.mdl.nnet3am ark:- "$feats" "ark:|gzip -c >$dir/ali.JOB.gz" || exit 1;
+  compile-train-graphs $dir/tree $srcdir/${iter}.mdl  $lang/L.fst "$tra" ark:- \| \
+  nnet3-align-compiled $scale_opts $ivector_opts \
+    --use-gpu=$use_gpu --beam=$beam --retry-beam=$retry_beam \
+    $srcdir/${iter}.mdl ark:- "$feats" "ark:|gzip -c >$dir/ali.JOB.gz" || exit 1;
 
 echo "$0: done aligning data."
 
