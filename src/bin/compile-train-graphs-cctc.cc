@@ -1,4 +1,4 @@
-// bin/compile-train-graphs.cc
+// bin/compile-train-graphs-cctc.cc
 
 // Copyright 2009-2012  Microsoft Corporation
 //           2012-2015  Johns Hopkins University (Author: Daniel Povey)
@@ -21,7 +21,8 @@
 #include "base/kaldi-common.h"
 #include "util/common-utils.h"
 #include "tree/context-dep.h"
-#include "hmm/transition-model.h"
+//#include "hmm/transition-model.h"
+#include "ctc/cctc-transition-model.h"
 #include "fstext/fstext-lib.h"
 #include "decoder/training-graph-compiler.h"
 
@@ -72,7 +73,7 @@ int main(int argc, char *argv[]) {
     ContextDependency ctx_dep;  // the tree.
     ReadKaldiObject(tree_rxfilename, &ctx_dep);
 
-    TransitionModel trans_model;
+    ctc::CctcTransitionModel trans_model;
     ReadKaldiObject(model_rxfilename, &trans_model);
 
     // need VectorFst because we will change it by adding subseq symbol.
@@ -84,7 +85,7 @@ int main(int argc, char *argv[]) {
         KALDI_ERR << "fstcomposecontext: Could not read disambiguation symbols from "
                   << disambig_rxfilename;
     
-    TrainingGraphCompiler gc(trans_model, ctx_dep, lex_fst, disambig_syms, gopts);
+    TrainingGraphCompilerCctc gc(trans_model, ctx_dep, lex_fst, disambig_syms, gopts);
 
     lex_fst = NULL;  // we gave ownership to gc.
 
