@@ -30,6 +30,7 @@
 int main(int argc, char *argv[]) {
   try {
     using namespace kaldi;
+    using namespace fst;
     typedef kaldi::int32 int32;
     using fst::SymbolTable;
     using fst::VectorFst;
@@ -82,7 +83,12 @@ int main(int argc, char *argv[]) {
     ReadKaldiObject(tree_rxfilename, &ctx_dep);
 
     ctc::CctcTransitionModel trans_model;
-    ReadKaldiObject(model_rxfilename, &trans_model);
+    //ReadKaldiObject(model_rxfilename, &trans_model);
+    {
+      bool binary;
+      Input ki(model_rxfilename, &binary);
+      trans_model.Read(ki.Stream(), binary);
+    }
 
     // need VectorFst because we will change it by adding subseq symbol.
     VectorFst<StdArc> *lex_fst = fst::ReadFstKaldi(lex_rxfilename);
