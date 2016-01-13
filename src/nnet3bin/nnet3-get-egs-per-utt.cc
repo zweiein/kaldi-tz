@@ -89,8 +89,12 @@ static void ProcessFile(const MatrixBase<BaseFloat> &feats,
 
     // add the labels.
     Posterior labels(frames_per_eg);
-    for (int32 i = 0; i < actual_frames_per_eg; i++)
-      labels[i] = pdf_post[t + i];
+    Posterior labels_tmp(frames_per_eg);
+    for (int32 i = 0; i < actual_frames_per_eg; i++) {
+      labels_tmp[i] = pdf_post[t + i];
+      labels_tmp[i].back().first = 0;
+      labels[i] = labels_tmp[i];
+    }
     // remaining posteriors for frames are empty.
     eg.io.push_back(NnetIo("output", num_pdfs, 0, labels));
     
