@@ -56,6 +56,14 @@ int main(int argc, char *argv[]) {
                 "more memory.  E.g. 500");
     po.Register("read-disambig-syms", &disambig_rxfilename, "File containing "
                 "list of disambiguation symbols in phone symbol table");
+
+    BaseFloat phone_lm_weight = 0.0;
+
+    po.Register("phone-lm-weight", &phone_lm_weight,
+                "The language-model weight to apply to the phone language "
+                "model that the CCTC system was trained with... this would "
+                "normally 0 [the theoretically best value], or positive but "
+                "close to zero.");
     
     po.Read(argc, argv);
 
@@ -85,7 +93,7 @@ int main(int argc, char *argv[]) {
         KALDI_ERR << "fstcomposecontext: Could not read disambiguation symbols from "
                   << disambig_rxfilename;
     
-    TrainingGraphCompilerCctc gc(trans_model, ctx_dep, lex_fst, disambig_syms, gopts);
+    TrainingGraphCompilerCctc gc(trans_model, ctx_dep, lex_fst, disambig_syms, gopts, phone_lm_weight);
 
     lex_fst = NULL;  // we gave ownership to gc.
 

@@ -21,6 +21,7 @@
 
 #include "base/kaldi-common.h"
 #include "hmm/transition-model.h"
+#include "ctc/cctc-transition-model.h"
 #include "fst/fstlib.h"
 #include "fstext/fstext-lib.h"
 
@@ -104,15 +105,16 @@ class TrainingGraphCompiler {
 };
 
 
-class TrainingGraphCompiler {
+class TrainingGraphCompilerCctc {
  public:
-  TrainingGraphCompiler(const TransitionModel &trans_model,  // Maintains reference to this object.
+  TrainingGraphCompilerCctc(const ctc::CctcTransitionModel &trans_model,  // Maintains reference to this object.
                         const ContextDependency &ctx_dep,  // And this.
                         fst::VectorFst<fst::StdArc> *lex_fst,  // Takes ownership of this object.
                         // It should not contain disambiguation symbols or subsequential symbol,
                         // but it should contain optional silence.
                         const std::vector<int32> &disambig_syms, // disambig symbols in phone symbol table.
-                        const TrainingGraphCompilerOptions &opts);
+                        const TrainingGraphCompilerOptions &opts, 
+                        BaseFloat phone_lm_weight);
 
 
   /// CompileGraph compiles a single training graph its input is a
@@ -139,9 +141,9 @@ class TrainingGraphCompiler {
       std::vector<fst::VectorFst<fst::StdArc> *> *out_fsts);
   
   
-  ~TrainingGraphCompiler() { delete lex_fst_; }
+  ~TrainingGraphCompilerCctc() { delete lex_fst_; }
  private:
-  const TransitionModel &trans_model_;
+  const ctc::CctcTransitionModel &trans_model_;
   const ContextDependency &ctx_dep_;
   fst::VectorFst<fst::StdArc> *lex_fst_; // lexicon FST (an input; we take
   // ownership as we need to modify it).
@@ -151,6 +153,7 @@ class TrainingGraphCompiler {
   // this is one of Dan's extensions.
 
   TrainingGraphCompilerOptions opts_;
+  BaseFloat phone_lm_weight_;
 };
 
 

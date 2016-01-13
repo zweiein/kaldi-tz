@@ -17,6 +17,7 @@
 // limitations under the License.
 #include "decoder/training-graph-compiler.h"
 #include "hmm/hmm-utils.h" // for GetHTransducer
+#include "ctc/cctc-graph.h"
 
 namespace kaldi {
 
@@ -249,15 +250,16 @@ bool TrainingGraphCompiler::CompileGraphs(
 
 //////////////////////////
 
-TrainingGraphCompiler::TrainingGraphCompiler(const TransitionModel &trans_model,
+TrainingGraphCompilerCctc::TrainingGraphCompilerCctc(const ctc::CctcTransitionModel &trans_model,
                                              const ContextDependency &ctx_dep,  // Does not maintain reference to this.
                                              fst::VectorFst<fst::StdArc> *lex_fst,
                                              const std::vector<int32> &disambig_syms,
-                                             const TrainingGraphCompilerOptions &opts):
+                                             const TrainingGraphCompilerOptions &opts, 
+                                             BaseFloat phone_lm_weight):
     trans_model_(trans_model), ctx_dep_(ctx_dep), lex_fst_(lex_fst),
-    disambig_syms_(disambig_syms), opts_(opts) {
+    disambig_syms_(disambig_syms), opts_(opts), phone_lm_weight_(phone_lm_weight) {
   using namespace fst;
-  const std::vector<int32> &phone_syms = trans_model_.GetPhones();  // needed to create context fst.
+  /* const std::vector<int32> &phone_syms = trans_model_.GetPhones();  // needed to create context fst.
 
   KALDI_ASSERT(!phone_syms.empty());
   KALDI_ASSERT(IsSortedAndUniq(phone_syms));
@@ -279,7 +281,8 @@ TrainingGraphCompiler::TrainingGraphCompiler(const TransitionModel &trans_model,
       AddSubsequentialLoop(subseq_symbol, lex_fst_);  // This is needed for
     // systems with right-context or we will not successfully compose
     // with C.
-  }
+  } 
+  */
 
   {  // make sure lexicon is olabel sorted.
     fst::OLabelCompare<fst::StdArc> olabel_comp;
@@ -287,7 +290,7 @@ TrainingGraphCompiler::TrainingGraphCompiler(const TransitionModel &trans_model,
   }
 }
 
-bool TrainingGraphCompiler::CompileGraphFromText(
+bool TrainingGraphCompilerCctc::CompileGraphFromText(
     const std::vector<int32> &transcript,
     fst::VectorFst<fst::StdArc> *out_fst) {
   using namespace fst;
@@ -296,7 +299,7 @@ bool TrainingGraphCompiler::CompileGraphFromText(
   return CompileGraph(word_fst, out_fst);
 }
 
-bool TrainingGraphCompiler::CompileGraph(const fst::VectorFst<fst::StdArc> &word_fst,
+bool TrainingGraphCompilerCctc::CompileGraph(const fst::VectorFst<fst::StdArc> &word_fst,
                                          fst::VectorFst<fst::StdArc> *out_fst) {
   using namespace fst;
   KALDI_ASSERT(lex_fst_ !=NULL);
@@ -307,8 +310,11 @@ bool TrainingGraphCompiler::CompileGraph(const fst::VectorFst<fst::StdArc> &word
   TableCompose(*lex_fst_, word_fst, &phone2word_fst, &lex_cache_);
 
   KALDI_ASSERT(phone2word_fst.Start() != kNoStateId);
+  ctc::CreateCctcDecodingFst(trans_model_, phone_lm_weight_,
+                               phone2word_fst, out_fst);
+  
 
-  ContextFst<StdArc> *cfst = NULL;
+  /* ContextFst<StdArc> *cfst = NULL;
   {  // make cfst [ it's expanded on the fly ]
     const std::vector<int32> &phone_syms = trans_model_.GetPhones();  // needed to create context fst.
     int32 subseq_symbol = phone_syms.back() + 1;
@@ -369,11 +375,12 @@ bool TrainingGraphCompiler::CompileGraph(const fst::VectorFst<fst::StdArc> &word
 
   delete H;
   delete cfst;
+  */
   return true;
 }
 
 
-bool TrainingGraphCompiler::CompileGraphsFromText(
+bool TrainingGraphCompilerCctc::CompileGraphsFromText(
     const std::vector<std::vector<int32> > &transcripts,
     std::vector<fst::VectorFst<fst::StdArc>*> *out_fsts) {
   using namespace fst;
@@ -389,7 +396,7 @@ bool TrainingGraphCompiler::CompileGraphsFromText(
   return ans;
 }
 
-bool TrainingGraphCompiler::CompileGraphs(
+bool TrainingGraphCompilerCctc::CompileGraphs(
     const std::vector<const fst::VectorFst<fst::StdArc>* > &word_fsts,
     std::vector<fst::VectorFst<fst::StdArc>* > *out_fsts) {
 
@@ -399,7 +406,7 @@ bool TrainingGraphCompiler::CompileGraphs(
   out_fsts->resize(word_fsts.size(), NULL);
   if (word_fsts.empty()) return true;
 
-  ContextFst<StdArc> *cfst = NULL;
+  /* ContextFst<StdArc> *cfst = NULL;
   {  // make cfst [ it's expanded on the fly ]
     const std::vector<int32> &phone_syms = trans_model_.GetPhones();  // needed to create context fst.
     int32 subseq_symbol = phone_syms.back() + 1;
@@ -411,7 +418,8 @@ bool TrainingGraphCompiler::CompileGraphs(
                                   disambig_syms_,
                                   ctx_dep_.ContextWidth(),
                                   ctx_dep_.CentralPosition());
-  }
+  } 
+  */
 
   for (size_t i = 0; i < word_fsts.size(); i++) {
     VectorFst<StdArc> phone2word_fst;
@@ -420,8 +428,10 @@ bool TrainingGraphCompiler::CompileGraphs(
 
     KALDI_ASSERT(phone2word_fst.Start() != kNoStateId &&
                  "Perhaps you have words missing in your lexicon?");
-    
-    VectorFst<StdArc> ctx2word_fst;
+    ctc::CreateCctcDecodingFst(trans_model_, phone_lm_weight_,
+                               phone2word_fst, (*out_fsts)[i] );
+   
+    /* VectorFst<StdArc> ctx2word_fst;
     ComposeContextFst(*cfst, phone2word_fst, &ctx2word_fst);
     // ComposeContextFst is like Compose but faster for this particular Fst type.
     // [and doesn't expand too many arcs in the ContextFst.]
@@ -430,9 +440,10 @@ bool TrainingGraphCompiler::CompileGraphs(
 
     (*out_fsts)[i] = ctx2word_fst.Copy();  // For now this contains the FST with symbols
     // representing phones-in-context.
+    */
   }
 
-  HTransducerConfig h_cfg;
+  /* HTransducerConfig h_cfg;
   h_cfg.transition_scale = opts_.transition_scale;
 
   std::vector<int32> disambig_syms_h;
@@ -472,6 +483,7 @@ bool TrainingGraphCompiler::CompileGraphs(
 
   delete H;
   delete cfst;
+  */
   return true;
 }
 
