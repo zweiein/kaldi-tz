@@ -1,4 +1,4 @@
-// nnet2bin/nnet-align-compiled.cc
+// nnet3bin/nnet3-align-compiled-cctc.cc
 
 // Copyright 2009-2012  Microsoft Corporation
 //                      Johns Hopkins University (author: Daniel Povey)
@@ -30,10 +30,14 @@
 #include "nnet3/nnet-am-decodable-simple.h"
 #include "lat/kaldi-lattice.h"
 
+#include "ctc/cctc-graph.h"
+#include "nnet3/nnet-cctc-decodable-simple.h"
+
 int main(int argc, char *argv[]) {
   try {
     using namespace kaldi;
     using namespace kaldi::nnet3;
+    using namespace kaldi::ctc;
     typedef kaldi::int32 int32;
     using fst::SymbolTable;
     using fst::VectorFst;
@@ -96,13 +100,13 @@ int main(int argc, char *argv[]) {
     kaldi::int64 frame_count = 0;
 
     {
-      TransitionModel trans_model;
-      AmNnetSimple am_nnet;
+      CctcTransitionModel trans_model;
+      Nnet nnet;
       {
         bool binary;
-        Input ki(model_in_filename, &binary);
-        trans_model.Read(ki.Stream(), binary);
-        am_nnet.Read(ki.Stream(), binary);
+        Input input(model_in_filename, &binary);
+        trans_model.Read(input.Stream(), binary);
+        nnet.Read(input.Stream(), binary);
       }
 
       RandomAccessBaseFloatMatrixReader online_ivector_reader(
@@ -157,15 +161,16 @@ int main(int argc, char *argv[]) {
           }
         }
 
-        {  // Add transition-probs to the FST.
+        /* {  // Add transition-probs to the FST.
           std::vector<int32> disambig_syms;  // empty.
           AddTransitionProbs(trans_model, disambig_syms,
                              transition_scale, self_loop_scale,
                              &decode_fst);
         }
+        */
 
-        DecodableAmNnetSimple nnet_decodable(
-            decodable_opts, trans_model, am_nnet,
+        DecodableNnetCctcSimple nnet_decodable(
+            decodable_opts, trans_model, nnet,
             features, ivector, online_ivectors,
             online_ivector_period);
 
