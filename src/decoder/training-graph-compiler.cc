@@ -310,6 +310,7 @@ bool TrainingGraphCompilerCctc::CompileGraph(const fst::VectorFst<fst::StdArc> &
   TableCompose(*lex_fst_, word_fst, &phone2word_fst, &lex_cache_);
 
   KALDI_ASSERT(phone2word_fst.Start() != kNoStateId);
+  ctc::ShiftPhonesAndAddBlanks(&phone2word_fst);
   ctc::CreateCctcDecodingFst(trans_model_, phone_lm_weight_,
                                phone2word_fst, out_fst);
   
@@ -427,7 +428,8 @@ bool TrainingGraphCompilerCctc::CompileGraphs(
     TableCompose(*lex_fst_, *(word_fsts[i]), &phone2word_fst, &lex_cache_);
 
     KALDI_ASSERT(phone2word_fst.Start() != kNoStateId &&
-                 "Perhaps you have words missing in your lexicon?");
+                 "Perhaps you have words missing in your lexicon?");    
+    ctc::ShiftPhonesAndAddBlanks(&phone2word_fst);
     ctc::CreateCctcDecodingFst(trans_model_, phone_lm_weight_,
                                phone2word_fst, (*out_fsts)[i] );
    
