@@ -26,6 +26,7 @@
 #include "fstext/fstext-lib.h"
 #include "decoder/training-graph-compiler.h"
 
+#include "ctc/cctc-graph.h"
 
 int main(int argc, char *argv[]) {
   try {
