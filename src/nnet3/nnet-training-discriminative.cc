@@ -34,11 +34,10 @@ namespace nnet3 {
 	
 
 NnetTrainerDiscriminative::NnetTrainerDiscriminative (const NnetTrainerOptions &opts, 
-                                        const AmNnetSimple &am_nnet, 
-                                        const TransitionModel &tmodel, 
+                                        const ctc::CctcTransitionModel &tmodel, 
                                         Nnet *nnet, 
                                         NnetDiscriminativeStats *stats):
-            opts_(opts), am_nnet_(am_nnet), tmodel_(tmodel),
+            opts_(opts), tmodel_(tmodel),
 			nnet_(nnet), stats_(stats), compiler_(*nnet, opts_.optimize_config) {
  
       if (opts_.zero_component_stats) 
@@ -118,7 +117,7 @@ void NnetTrainerDiscriminative::ProcessOutputs(const NnetExample &eg, const Latt
       BaseFloat tot_weight, tot_objf;
       bool supply_deriv = true;
       LatticeComputations(stats_,obj_type,
-                          opts_,am_nnet_,tmodel_,
+                          opts_,tmodel_,
                           clat,num_ali,io.features,
                           io.name,supply_deriv, computer,
                           &tot_weight, &tot_objf);
@@ -132,8 +131,7 @@ NnetTrainerDiscriminative::~NnetTrainerDiscriminative() {
 void LatticeComputations (NnetDiscriminativeStats *stats, 
                                   ObjectiveType objective_type,
                                   const NnetTrainerOptions &opts,
-                                  const AmNnetSimple &am_nnet,
-                                  const TransitionModel &tmodel,
+                                  const ctc::CctcTransitionModel &tmodel,
                                   const Lattice &lat,
                                   const std::vector<int32> &num_ali,
                                   const GeneralMatrix &supervision,
@@ -270,7 +268,7 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 
 	// Get the MPE or MMI posteriors.
 	Posterior post;
-	stats->tot_den_objf += eg_weight * GetDiscriminativePosteriors(opts,am_nnet,tmodel,supervision,clat,num_ali,&post);
+	stats->tot_den_objf += eg_weight * GetDiscriminativePosteriors(opts,tmodel,supervision,clat,num_ali,&post);
 	ScalePosterior(eg_weight, &post);
 	double tot_num_post = 0.0, tot_den_post = 0.0;
 	  std::vector<MatrixElement<BaseFloat> > sv_labels;
@@ -313,7 +311,6 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 
 
 double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
-                                                const AmNnetSimple &am_nnet,
                                                 const TransitionModel &tmodel,
                                                 const GeneralMatrix &supervision, 
                                                 const Lattice &clat,

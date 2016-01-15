@@ -70,20 +70,19 @@ int main(int argc, char *argv[]) {
         examples_rspecifier = po.GetArg(4),
         nnet_wxfilename = po.GetArg(5);
              
-    TransitionModel trans_model;
-    AmNnetSimple am_nnet;
+    ctc::CctcTransitionModel trans_model;
+    Nnet nnet;
     {
-      bool binary_read;
-      Input ki(mdl_rxfilename, &binary_read);
-      trans_model.Read(ki.Stream(), binary_read);
-      am_nnet.Read(ki.Stream(), binary_read);
+      bool binary;
+      Input ki(mdl_rxfilename, &binary);
+      trans_model.Read(ki.Stream(), binary);
+      nnet.Read(ki.Stream(), binary);
     }
-    Nnet nnet = am_nnet.GetNnet();
     NnetDiscriminativeStats stats;
 
     bool ok;
     {
-      NnetTrainerDiscriminative trainer(train_config, am_nnet, trans_model, &nnet, &stats);
+      NnetTrainerDiscriminative trainer(train_config, trans_model, &nnet, &stats);
       SequentialLatticeReader clat_reader(clat_rspecifier);
 	  RandomAccessInt32VectorReader ref_ali_reader(ref_ali_rspecifier);
 	  SequentialNnetExampleReader example_reader(examples_rspecifier);

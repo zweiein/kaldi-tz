@@ -128,8 +128,7 @@ class NnetTrainerDiscriminative {
  public:
 
   NnetTrainerDiscriminative (const NnetTrainerOptions &opts, 
-                                        const AmNnetSimple &am_nnet, 
-                                        const TransitionModel &tmodel, 
+                                        const ctc::CctcTransitionModel &tmodel, 
                                         Nnet *nnet, 
                                         NnetDiscriminativeStats *stats);
 
@@ -141,8 +140,7 @@ class NnetTrainerDiscriminative {
   void ProcessOutputs(const NnetExample &eg, const Lattice &clat, 
                             const std::vector<int32> &num_ali, NnetComputer *computer);
   const NnetTrainerOptions &opts_;
-  const AmNnetSimple &am_nnet_;
-  const TransitionModel &tmodel_;
+  const ctc::CctcTransitionModel &tmodel_;
   
   Nnet *nnet_;
   Nnet *delta_nnet_;  // Only used if momentum != 0.0.  nnet representing
@@ -194,8 +192,7 @@ class NnetTrainerDiscriminative {
  void LatticeComputations(NnetDiscriminativeStats *stats, 
                                   ObjectiveType objective_type,
                                   const NnetTrainerOptions &opts,
-                                  const AmNnetSimple &am_nnet,
-                                  const TransitionModel &tmodel,
+                                  const ctc::CctcTransitionModel &tmodel,
                                   const Lattice &clat,
                                   const std::vector<int32> &num_ali,
                                   const GeneralMatrix &supervision,
@@ -206,8 +203,7 @@ class NnetTrainerDiscriminative {
                                   BaseFloat *tot_objf);
 
  double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
-                                                const AmNnetSimple &am_nnet,
-                                                const TransitionModel &tmodel,
+                                                const ctc::CctcTransitionModel &tmodel,
                                                 const GeneralMatrix &supervision, 
                                                 const Lattice &clat,
                                                 const std::vector<int32> &num_ali,
