@@ -735,7 +735,7 @@ bool LatticeBoost(const TransitionModel &trans,
   return true;
 }
 
-bool LatticeBoost(const TransitionModel &trans,
+bool LatticeBoostCctc(const ctc::CctcTransitionModel &trans,
                   const std::vector<int32> &alignment,
                   const std::vector<int32> &silence_phones,
                   BaseFloat b,
@@ -759,13 +759,13 @@ bool LatticeBoost(const TransitionModel &trans,
          aiter.Next()) {
       LatticeArc arc = aiter.Value();
       if (arc.ilabel != 0) {  // Non-epsilon arc
-        if (arc.ilabel < 0 || arc.ilabel > trans.NumTransitionIds()) {
+        if (arc.ilabel < 0 || arc.ilabel > trans.NumGraphLabels()) {
           KALDI_WARN << "Lattice has out-of-range transition-ids: "
                      << "lattice/model mismatch?";
           return false;
         }
-        int32 phone = trans.TransitionIdToPhone(arc.ilabel),
-            ref_phone = trans.TransitionIdToPhone(alignment[cur_time]);
+        int32 phone = trans.GraphLabelToPhone(arc.ilabel),
+            ref_phone = trans.GraphLabelToPhone(alignment[cur_time]);
         BaseFloat frame_error;
         if (phone == ref_phone) {
           frame_error = 0.0;
