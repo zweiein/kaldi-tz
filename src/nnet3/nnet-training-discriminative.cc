@@ -344,7 +344,7 @@ double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
     // we'll return the denominator-lattice forward backward likelihood,
     // which is one term in the objective function.
 
-     return LatticeForwardBackwardMmi(tmodel, clat, num_ali,
+     return LatticeForwardBackwardMmiCctc(tmodel, clat, num_ali,
                                          opts.drop_frames, convert_to_pdfs,
                                          cancel, post);
       }
