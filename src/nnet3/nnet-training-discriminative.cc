@@ -160,18 +160,18 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 	case kMpe: {
   if (opts.criterion == "mmi" && opts.boost != 0.0) {
     BaseFloat max_silence_error = 0.0;
-    LatticeBoost(tmodel, num_ali, silence_phones,opts.boost, max_silence_error, &clat);
+    LatticeBoostCctc(tmodel, num_ali, silence_phones,opts.boost, max_silence_error, &clat);
   }
   
   int32 num_frames = num_ali.size();
   stats->tot_t += num_frames;
   stats->tot_t_weighted += num_frames * eg_weight;
   std::vector<CuMatrix<BaseFloat> > forward_data_; 
-  const VectorBase<BaseFloat> &priors = am_nnet.Priors();
+  //const VectorBase<BaseFloat> &priors = am_nnet.Priors();
   const CuMatrixBase<BaseFloat> &posteriors = output;
   KALDI_ASSERT(posteriors.NumRows() == num_frames);
   int32 num_pdfs = posteriors.NumCols();
-  KALDI_ASSERT(num_pdfs == priors.Dim());
+  //KALDI_ASSERT(num_pdfs == priors.Dim());
   
   typedef LatticeArc Arc;
   typedef Arc::StateId StateId;
@@ -191,7 +191,7 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 
   if (opts.criterion == "mmi") { // need numerator probabilities...
     for (int32 t = 0; t < num_frames; t++) {
-      int32 tid = num_ali[t], pdf_id = tmodel.TransitionIdToPdf(tid);
+      int32 tid = num_ali[t], pdf_id = tmodel.GraphLabelToOutputIndex(tid);
       KALDI_ASSERT(pdf_id >= 0 && pdf_id < num_pdfs);
       requested_indexes.push_back(MakePair(t, pdf_id));
 	}
@@ -205,7 +205,7 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
    for (fst::ArcIterator<Lattice> aiter(clat, s); !aiter.Done(); aiter.Next()) {
 	 const Arc &arc = aiter.Value();
 	 if (arc.ilabel != 0) { // input-side has transition-ids, output-side empty
-	   int32 tid = arc.ilabel, pdf_id = tmodel.TransitionIdToPdf(tid);
+	   int32 tid = arc.ilabel, pdf_id = tmodel.GraphLabelToOutputIndex(tid);
 	   requested_indexes.push_back(MakePair(t, pdf_id));
 	 }
    }
@@ -229,7 +229,8 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 	   num_floored++;
 	 }
 	 int32 pdf_id = requested_indexes[index].second;
-	 BaseFloat pseudo_loglike = Log(post / priors(pdf_id)) * opts.acoustic_scale;
+	 //BaseFloat pseudo_loglike = Log(post / priors(pdf_id)) * opts.acoustic_scale;
+	 BaseFloat pseudo_loglike = Log(post / 1.0) * opts.acoustic_scale;
 	 answers[index] = pseudo_loglike;
    }
    if (num_floored > 0) {
@@ -311,7 +312,7 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 
 
 double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
-                                                const TransitionModel &tmodel,
+                                                const ctc::CctcTransitionModel &tmodel,
                                                 const GeneralMatrix &supervision, 
                                                 const Lattice &clat,
                                                 const std::vector<int32> &num_ali,
