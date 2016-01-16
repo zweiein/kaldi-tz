@@ -348,6 +348,32 @@ void ConvertPosteriorToPdfs(const TransitionModel &tmodel,
   }
 }
 
+void ConvertPosteriorToPdfsCctc(const ctc::CctcTransitionModel &tmodel,
+                            const Posterior &post_in,
+                            Posterior *post_out) {
+  post_out->clear();
+  post_out->resize(post_in.size());
+  for (size_t i = 0; i < post_out->size(); i++) {
+    unordered_map<int32, BaseFloat> pdf_to_post;
+    for (size_t j = 0; j < post_in[i].size(); j++) {
+      int32 tid = post_in[i][j].first,
+          pdf_id = tmodel.GraphLabelToOutputIndex(tid);
+      BaseFloat post = post_in[i][j].second;
+      if (pdf_to_post.count(pdf_id) == 0)
+        pdf_to_post[pdf_id] = post;
+      else
+        pdf_to_post[pdf_id] += post;
+    }
+    (*post_out)[i].reserve(pdf_to_post.size());
+    for (unordered_map<int32, BaseFloat>::const_iterator iter =
+             pdf_to_post.begin(); iter != pdf_to_post.end(); ++iter) {
+      if (iter->second != 0.0)
+        (*post_out)[i].push_back(
+            std::make_pair(iter->first, iter->second));
+    }
+  }
+}
+
 void ConvertPosteriorToPhones(const TransitionModel &tmodel,
                               const Posterior &post_in,
                               Posterior *post_out) {

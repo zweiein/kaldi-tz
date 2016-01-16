@@ -326,7 +326,7 @@ double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
   if (opts.criterion == "mpfe" || opts.criterion == "smbr") {
     Posterior tid_post;
     double ans;
-    ans = LatticeForwardBackwardMpeVariants(tmodel, silence_phones, clat,
+    ans = LatticeForwardBackwardMpeVariantsCctc(tmodel, silence_phones, clat,
                                             num_ali, opts.criterion,
                                             opts.one_silence_class,
                                             &tid_post);
