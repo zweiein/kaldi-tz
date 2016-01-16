@@ -186,6 +186,11 @@ void ConvertPosteriorToPdfs(const TransitionModel &tmodel,
                             const Posterior &post_in,
                             Posterior *post_out);
 
+void ConvertPosteriorToPdfsCctc(const ctc::CctcTransitionModel &tmodel,
+                            const Posterior &post_in,
+                            Posterior *post_out);
+
+
 /// Converts a posterior over transition-ids to be a posterior
 /// over phones.
 void ConvertPosteriorToPhones(const TransitionModel &tmodel,

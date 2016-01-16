@@ -176,6 +176,16 @@ BaseFloat LatticeForwardBackwardMpeVariants(
     bool one_silence_class,
     Posterior *post);
 
+BaseFloat LatticeForwardBackwardMpeVariantsCctc(
+    const ctc::CctcTransitionModel &trans,
+    const std::vector<int32> &silence_phones,
+    const Lattice &lat,
+    const std::vector<int32> &num_ali,
+    std::string criterion,
+    bool one_silence_class,
+    Posterior *post);
+
+
 /**
    This function can be used to compute posteriors for MMI, with a positive contribution
    for the numerator and a negative one for the denominator.  This function is not actually

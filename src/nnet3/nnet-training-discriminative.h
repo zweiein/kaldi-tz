@@ -29,6 +29,9 @@
 #include "hmm/transition-model.h"
 #include "lat/kaldi-lattice.h"
 
+#include "ctc/cctc-transition-model.h"
+
+
 namespace kaldi {
 namespace nnet3 {
 
