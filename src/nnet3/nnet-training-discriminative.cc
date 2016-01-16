@@ -336,7 +336,7 @@ double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
 	//	KALDI_LOG<<"i="<<i<<" num_ali:"<<num_ali[i];
 	//WriteLattice(std::cerr, false, clat);
 	//KALDI_LOG<<"tid_post.size="<<tid_post.size();
-    ConvertPosteriorToPdfs(tmodel, tid_post, post);
+    ConvertPosteriorToPdfsCctc(tmodel, tid_post, post);
     return ans; // returns the objective function.
   } else {
     KALDI_ASSERT(opts.criterion == "mmi");
