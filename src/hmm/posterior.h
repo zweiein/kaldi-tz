@@ -29,6 +29,9 @@
 #include "util/kaldi-table.h"
 #include "hmm/transition-model.h"
 
+#include "ctc/cctc-transition-model.h"
+
+
 
 namespace kaldi {
 

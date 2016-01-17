@@ -16,7 +16,7 @@ OBJFILES = kaldi-lattice.o lattice-functions.o word-align-lattice.o \
 LIBNAME = kaldi-lat
 
 ADDLIBS = ../hmm/kaldi-hmm.a ../tree/kaldi-tree.a ../matrix/kaldi-matrix.a \
-          ../util/kaldi-util.a ../base/kaldi-base.a
+          ../util/kaldi-util.a ../base/kaldi-base.a ../ctc/kaldi-ctc.a
 
 
 include ../makefiles/default_rules.mk

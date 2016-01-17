@@ -29,8 +29,6 @@
 #include "base/kaldi-math.h"
 #include "hmm/hmm-utils.h"
 
-#include "ctc/cctc-transition-model.h"
-
 
 namespace kaldi {
 using std::map;

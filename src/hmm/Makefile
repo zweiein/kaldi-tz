@@ -9,7 +9,7 @@ OBJFILES = hmm-topology.o transition-model.o hmm-utils.o tree-accu.o posterior.o
 
 LIBNAME = kaldi-hmm
 ADDLIBS = ../tree/kaldi-tree.a ../matrix/kaldi-matrix.a ../util/kaldi-util.a \
-          ../base/kaldi-base.a 
+          ../base/kaldi-base.a ../ctc/kaldi-ctc.a
 
 include ../makefiles/default_rules.mk
 
