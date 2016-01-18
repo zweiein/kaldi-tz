@@ -37,16 +37,6 @@ int main(int argc, char *argv[]) {
     using fst::VectorFst;
     using fst::StdArc;
 
-
-    // used for avoiding undefined reference CreateCctcDecodingFst, don't know why this works
-         ctc::CctcTransitionModel tmp1;
-         VectorFst<StdArc> *tmp2 = NULL;
-         BaseFloat tmp3 = 0.0;
-         VectorFst<StdArc> tmp4;
-         ctc::CreateCctcDecodingFst(tmp1, tmp3,
-                                     *tmp2, &tmp4);
-
-
     const char *usage =
         "Creates training graphs (without transition-probabilities, by default)\n"
         "\n"
@@ -170,6 +160,18 @@ int main(int argc, char *argv[]) {
     }
     KALDI_LOG << "compile-train-graphs: succeeded for " << num_succeed
               << " graphs, failed for " << num_fail;
+
+
+    // used for avoiding undefined reference CreateCctcDecodingFst, don't know why this works
+         ctc::CctcTransitionModel tmp1;
+         VectorFst<StdArc> tmp2;
+         BaseFloat tmp3 = 0.0;
+         VectorFst<StdArc> tmp4;
+         ctc::CreateCctcDecodingFst(tmp1, tmp3,
+                                     tmp2, &tmp4);
+
+
+    
     return (num_succeed != 0 ? 0 : 1);
   } catch(const std::exception &e) {
     std::cerr << e.what();
