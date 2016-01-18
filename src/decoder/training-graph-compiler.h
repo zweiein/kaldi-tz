@@ -105,58 +105,6 @@ class TrainingGraphCompiler {
 };
 
 
-class TrainingGraphCompilerCctc {
- public:
-  TrainingGraphCompilerCctc(const ctc::CctcTransitionModel &trans_model,  // Maintains reference to this object.
-                        const ContextDependency &ctx_dep,  // And this.
-                        fst::VectorFst<fst::StdArc> *lex_fst,  // Takes ownership of this object.
-                        // It should not contain disambiguation symbols or subsequential symbol,
-                        // but it should contain optional silence.
-                        const std::vector<int32> &disambig_syms, // disambig symbols in phone symbol table.
-                        const TrainingGraphCompilerOptions &opts, 
-                        BaseFloat phone_lm_weight);
-
-
-  /// CompileGraph compiles a single training graph its input is a
-  // weighted acceptor (G) at the word level, its output is HCLG.
-  // Note: G could actually be an acceptor, it would also work.
-  // This function is not const for technical reasons involving the cache.
-  // if not for "table_compose" we could make it const.
-  bool CompileGraph(const fst::VectorFst<fst::StdArc> &word_grammar,
-                    fst::VectorFst<fst::StdArc> *out_fst);
-  
-  // CompileGraphs allows you to compile a number of graphs at the same
-  // time.  This consumes more memory but is faster.
-  bool CompileGraphs(
-      const std::vector<const fst::VectorFst<fst::StdArc> *> &word_fsts,
-      std::vector<fst::VectorFst<fst::StdArc> *> *out_fsts);
-
-  // This version creates an FST from the text and calls CompileGraph.
-  bool CompileGraphFromText(const std::vector<int32> &transcript,
-                            fst::VectorFst<fst::StdArc> *out_fst);
-
-  // This function creates FSTs from the text and calls CompileGraphs.
-  bool CompileGraphsFromText(
-      const std::vector<std::vector<int32> >  &word_grammar,
-      std::vector<fst::VectorFst<fst::StdArc> *> *out_fsts);
-  
-  
-  ~TrainingGraphCompilerCctc() { delete lex_fst_; }
- private:
-  const ctc::CctcTransitionModel &trans_model_;
-  const ContextDependency &ctx_dep_;
-  fst::VectorFst<fst::StdArc> *lex_fst_; // lexicon FST (an input; we take
-  // ownership as we need to modify it).
-  std::vector<int32> disambig_syms_; // disambig symbols (if any) in the phone
-  // symbol table.
-  fst::TableComposeCache<fst::Fst<fst::StdArc> > lex_cache_;  // stores matcher..
-  // this is one of Dan's extensions.
-
-  TrainingGraphCompilerOptions opts_;
-  BaseFloat phone_lm_weight_;
-};
-
-
 
 }  // end namespace kaldi.
 

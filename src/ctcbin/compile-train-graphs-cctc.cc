@@ -24,7 +24,7 @@
 //#include "hmm/transition-model.h"
 #include "ctc/cctc-transition-model.h"
 #include "fstext/fstext-lib.h"
-#include "decoder/training-graph-compiler.h"
+#include "ctc/training-graph-compiler.h"
 
 #include "ctc/cctc-graph.h"
 
@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
         " compile-train-graphs tree 1.mdl lex.fst ark:train.tra ark:graphs.fsts\n";
     ParseOptions po(usage);
 
-    TrainingGraphCompilerOptions gopts;
+    ctc::TrainingGraphCompilerOptions gopts;
     int32 batch_size = 250;
     gopts.transition_scale = 0.0;  // Change the default to 0.0 since we will generally add the
     // transition probs in the alignment phase (since they change eacm time)
@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
         KALDI_ERR << "fstcomposecontext: Could not read disambiguation symbols from "
                   << disambig_rxfilename;
     
-    TrainingGraphCompilerCctc gc(trans_model, ctx_dep, lex_fst, disambig_syms, gopts, phone_lm_weight);
+    ctc::TrainingGraphCompilerCctc gc(trans_model, ctx_dep, lex_fst, disambig_syms, gopts, phone_lm_weight);
 
     lex_fst = NULL;  // we gave ownership to gc.
 
@@ -160,18 +160,7 @@ int main(int argc, char *argv[]) {
     }
     KALDI_LOG << "compile-train-graphs: succeeded for " << num_succeed
               << " graphs, failed for " << num_fail;
-
-
-    // used for avoiding undefined reference CreateCctcDecodingFst, don't know why this works
-         ctc::CctcTransitionModel tmp1;
-         VectorFst<StdArc> tmp2;
-         BaseFloat tmp3 = 0.0;
-         VectorFst<StdArc> tmp4;
-         ctc::CreateCctcDecodingFst(tmp1, tmp3,
-                                     tmp2, &tmp4);
-
-
-    
+ 
     return (num_succeed != 0 ? 0 : 1);
   } catch(const std::exception &e) {
     std::cerr << e.what();
