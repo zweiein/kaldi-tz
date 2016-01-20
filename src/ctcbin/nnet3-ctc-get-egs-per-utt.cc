@@ -1,4 +1,4 @@
-// ctcbin/nnet3-ctc-get-egs.cc
+// ctcbin/nnet3-ctc-get-egs-per-utt.cc
 
 // Copyright      2015  Johns Hopkins University (author:  Daniel Povey)
 
@@ -43,6 +43,7 @@ static bool ProcessFile(const MatrixBase<BaseFloat> &feats,
                         int64 *num_frames_written,
                         int64 *num_egs_written,
                         NnetCctcExampleWriter *example_writer) {
+  frames_per_eg = feats.NumRows();
   int32 num_feature_frames = feats.NumRows(),
       num_ctc_frames = cctc_supervision.num_frames,
       num_feature_frames_subsampled = num_feature_frames /
@@ -133,7 +134,8 @@ static bool ProcessFile(const MatrixBase<BaseFloat> &feats,
       nnet_cctc_eg.Compress();
 
     std::ostringstream os;
-    os << utt_id << "-" << range_start;
+    //os << utt_id << "-" << range_start;
+    os << utt_id;
 
     std::string key = os.str(); // key is <utt_id>-<frame_id>
 
