@@ -43,7 +43,6 @@ static bool ProcessFile(const MatrixBase<BaseFloat> &feats,
                         int64 *num_frames_written,
                         int64 *num_egs_written,
                         NnetCctcExampleWriter *example_writer) {
-  frames_per_eg = feats.NumRows();
   int32 num_feature_frames = feats.NumRows(),
       num_ctc_frames = cctc_supervision.num_frames,
       num_feature_frames_subsampled = num_feature_frames /
@@ -286,6 +285,14 @@ int main(int argc, char *argv[]) {
           num_err++;
           continue;
         }
+        //each example contains all frames
+        num_frames = feats.NumRows();
+        if (num_frames <= 0 || left_context < 0 || right_context < 0 ||
+            length_tolerance < 0 || frame_subsampling_factor <= 0)
+          KALDI_ERR << "One of the integer options is out of the allowed range.";
+        RoundUpNumFrames(frame_subsampling_factor,
+                         &num_frames, &num_frames_overlap);
+
         if (ProcessFile(feats, ivector_feats, supervision, key, compress,
                         left_context, right_context, num_frames,
                         num_frames_overlap, frame_subsampling_factor,
