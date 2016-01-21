@@ -20,8 +20,8 @@
 #include "nnet3/nnet-training-discriminative.h"
 #include "nnet3/nnet-utils.h"
 #include "nnet3/am-nnet-simple.h"
-#include "hmm/posterior.h"
-#include "lat/lattice-functions.h"
+#include "ctc/posterior.h"
+#include "ctc/lattice-functions.h"
 #include "lat/kaldi-lattice.h"
 #include "matrix/sparse-matrix.h"
 #include "matrix/kaldi-matrix.h"
@@ -160,7 +160,7 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 	case kMpe: {
   if (opts.criterion == "mmi" && opts.boost != 0.0) {
     BaseFloat max_silence_error = 0.0;
-    LatticeBoostCctc(tmodel, num_ali, silence_phones,opts.boost, max_silence_error, &clat);
+    ctc::LatticeBoostCctc(tmodel, num_ali, silence_phones,opts.boost, max_silence_error, &clat);
   }
   
   int32 num_frames = num_ali.size();
@@ -326,7 +326,7 @@ double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
   if (opts.criterion == "mpfe" || opts.criterion == "smbr") {
     Posterior tid_post;
     double ans;
-    ans = LatticeForwardBackwardMpeVariantsCctc(tmodel, silence_phones, clat,
+    ans = ctc::LatticeForwardBackwardMpeVariantsCctc(tmodel, silence_phones, clat,
                                             num_ali, opts.criterion,
                                             opts.one_silence_class,
                                             &tid_post);
@@ -336,7 +336,7 @@ double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
 	//	KALDI_LOG<<"i="<<i<<" num_ali:"<<num_ali[i];
 	//WriteLattice(std::cerr, false, clat);
 	//KALDI_LOG<<"tid_post.size="<<tid_post.size();
-    ConvertPosteriorToPdfsCctc(tmodel, tid_post, post);
+    ctc::ConvertPosteriorToPdfsCctc(tmodel, tid_post, post);
     return ans; // returns the objective function.
   } else {
     KALDI_ASSERT(opts.criterion == "mmi");
@@ -344,7 +344,7 @@ double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
     // we'll return the denominator-lattice forward backward likelihood,
     // which is one term in the objective function.
 
-     return LatticeForwardBackwardMmiCctc(tmodel, clat, num_ali,
+     return ctc::LatticeForwardBackwardMmiCctc(tmodel, clat, num_ali,
                                          opts.drop_frames, convert_to_pdfs,
                                          cancel, post);
       }

@@ -21,7 +21,7 @@
 #include "util/common-utils.h"
 #include "nnet3/nnet-training-discriminative.h"
 #include "nnet3/nnet-example.h"
-#include "lat/lattice-functions.h"
+#include "ctc/lattice-functions.h"
 
 #include "nnet3/nnet-cctc-example.h"
 
@@ -30,6 +30,7 @@ int main(int argc, char *argv[]) {
   try {
     using namespace kaldi;
     using namespace kaldi::nnet3;
+    using namespace ctc;
     typedef kaldi::int32 int32;
     typedef kaldi::int64 int64;
 
