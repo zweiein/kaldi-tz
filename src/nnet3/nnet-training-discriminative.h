@@ -135,12 +135,12 @@ class NnetTrainerDiscriminative {
                                         Nnet *nnet, 
                                         NnetDiscriminativeStats *stats);
 
-  void Train (const NnetExample &eg, const Lattice &clat, const std::vector<int32> &num_ali);
+  void Train (const NnetCctcExample &eg, const Lattice &clat, const std::vector<int32> &num_ali);
 
   ~NnetTrainerDiscriminative ();
   
  private:
-  void ProcessOutputs(const NnetExample &eg, const Lattice &clat, 
+  void ProcessOutputs(const NnetCctcExample &eg, const Lattice &clat, 
                             const std::vector<int32> &num_ali, NnetComputer *computer);
   const NnetTrainerOptions &opts_;
   const ctc::CctcTransitionModel &tmodel_;

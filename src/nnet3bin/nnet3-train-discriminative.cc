@@ -23,6 +23,9 @@
 #include "nnet3/nnet-example.h"
 #include "lat/lattice-functions.h"
 
+#include "nnet3/nnet-cctc-example.h"
+
+
 int main(int argc, char *argv[]) {
   try {
     using namespace kaldi;
@@ -85,7 +88,7 @@ int main(int argc, char *argv[]) {
       NnetTrainerDiscriminative trainer(train_config, trans_model, &nnet, &stats);
       SequentialLatticeReader clat_reader(clat_rspecifier);
 	  RandomAccessInt32VectorReader ref_ali_reader(ref_ali_rspecifier);
-	  SequentialNnetExampleReader example_reader(examples_rspecifier);
+	  SequentialNnetCctcExampleReader example_reader(examples_rspecifier);
       
       for (; !example_reader.Done() && !clat_reader.Done(); example_reader.Next(), clat_reader.Next()) {
           std::string utt = example_reader.Key();

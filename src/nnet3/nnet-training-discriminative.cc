@@ -55,13 +55,13 @@ NnetTrainerDiscriminative::NnetTrainerDiscriminative (const NnetTrainerOptions &
 
 }
             
-void NnetTrainerDiscriminative::Train(const NnetExample &eg, 
+void NnetTrainerDiscriminative::Train(const NnetCctcExample &eg, 
                                         const Lattice &clat, 
                                         const std::vector<int32> &num_ali) {
   bool need_model_derivative = true;
   ComputationRequest request;
 
-  GetComputationRequest(*nnet_, eg, need_model_derivative,
+  GetCctcComputationRequest(*nnet_, eg, need_model_derivative,
                         opts_.store_component_stats,
                         &request);
   const NnetComputation *computation = compiler_.Compile(request);
@@ -70,7 +70,7 @@ void NnetTrainerDiscriminative::Train(const NnetExample &eg,
                         *nnet_,
                         (delta_nnet_ == NULL ? nnet_ : delta_nnet_));
   // give the inputs to the computer object.
-  computer.AcceptInputs(*nnet_, eg.io);
+  computer.AcceptInputs(*nnet_, eg.inputs);
   computer.Forward();
   this->ProcessOutputs(eg, clat, num_ali, &computer);
   computer.Backward();
@@ -97,7 +97,7 @@ void NnetTrainerDiscriminative::Train(const NnetExample &eg,
   }
 }
 
-void NnetTrainerDiscriminative::ProcessOutputs(const NnetExample &eg, const Lattice &clat, 
+void NnetTrainerDiscriminative::ProcessOutputs(const NnetCctcExample &eg, const Lattice &clat, 
                             const std::vector<int32> &num_ali, NnetComputer *computer) {
 
 	if (!SplitStringToIntegers(opts_.silence_phones_str, ":", false,
@@ -106,8 +106,8 @@ void NnetTrainerDiscriminative::ProcessOutputs(const NnetExample &eg, const Latt
 				              << opts_.silence_phones_str;
 	}
 	
-  std::vector<NnetIo>::const_iterator iter = eg.io.begin(),
-      end = eg.io.end();
+  std::vector<NnetIo>::const_iterator iter = eg.inputs.begin(),
+      end = eg.inputs.end();
   for (; iter != end; ++iter) {
     const NnetIo &io = *iter;
     int32 node_index = nnet_->GetNodeIndex(io.name);
