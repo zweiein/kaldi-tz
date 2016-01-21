@@ -30,6 +30,8 @@
 #include "lat/kaldi-lattice.h"
 
 #include "ctc/cctc-transition-model.h"
+#include "nnet3/nnet-cctc-example.h"
+
 
 
 namespace kaldi {
