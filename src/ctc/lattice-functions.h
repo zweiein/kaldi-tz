@@ -21,14 +21,14 @@
 // limitations under the License.
 
 
-#ifndef KALDI_LAT_LATTICE_FUNCTIONS_H_
-#define KALDI_LAT_LATTICE_FUNCTIONS_H_
+#ifndef KALDI_CTC_LATTICE_FUNCTIONS_H_
+#define KALDI_CTC_LATTICE_FUNCTIONS_H_
 
 #include <vector>
 #include <map>
 
 #include "base/kaldi-common.h"
-#include "hmm/posterior.h"
+#include "ctc/posterior.h"
 #include "fstext/fstext-lib.h"
 #include "hmm/transition-model.h"
 #include "lat/kaldi-lattice.h"
@@ -38,6 +38,7 @@
 
 
 namespace kaldi {
+namespace ctc {
 
 /// This function iterates over the states of a topologically sorted lattice and
 /// counts the time instance corresponding to each state. The times are returned
@@ -338,6 +339,7 @@ void ComposeCompactLatticeDeterministic(
     CompactLattice* composed_clat);
 
 }  // namespace kaldi
+}
 
 #endif  // KALDI_LAT_LATTICE_FUNCTIONS_H_
 

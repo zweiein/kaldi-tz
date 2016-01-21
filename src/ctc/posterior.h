@@ -1,4 +1,4 @@
-// hmm/posterior.h
+// ctc/posterior.h
 
 // Copyright 2009-2011     Microsoft Corporation
 //           2013-2014     Johns Hopkins University (author: Daniel Povey)
@@ -20,8 +20,8 @@
 // See the Apache 2 License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef KALDI_HMM_POSTERIOR_H_
-#define KALDI_HMM_POSTERIOR_H_
+#ifndef KALDI_CTC_POSTERIOR_H_
+#define KALDI_CTC_POSTERIOR_H_
 
 #include "base/kaldi-common.h"
 #include "tree/context-dep.h"
@@ -34,6 +34,7 @@
 
 
 namespace kaldi {
+namespace ctc {
 
 
 /// \addtogroup posterior_group
@@ -224,6 +225,7 @@ void WeightSilencePostDistributed(const TransitionModel &trans_model,
 
 
 } // end namespace kaldi
+}
 
 
 #endif

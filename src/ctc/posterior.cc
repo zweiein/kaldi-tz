@@ -1,4 +1,4 @@
-// hmm/posterior.cc
+// ctc/posterior.cc
 
 // Copyright 2009-2011  Microsoft Corporation
 //           2013-2014  Johns Hopkins University (author: Daniel Povey)
@@ -21,12 +21,13 @@
 // limitations under the License.
 
 #include <vector>
-#include "hmm/posterior.h"
+#include "ctc/posterior.h"
 #include "util/kaldi-table.h"
 #include "util/stl-utils.h"
 
 
 namespace kaldi {
+namespace ctc {
 
 void WritePosterior(std::ostream &os, bool binary, const Posterior &post) {
   if (binary) {
@@ -512,3 +513,4 @@ BaseFloat VectorToPosteriorEntry(
 
 
 } // End namespace kaldi
+}

@@ -1,4 +1,4 @@
-// decoder/training-graph-compiler.cc
+// ctc/training-graph-compiler.cc
 // Copyright 2009-2011 Microsoft Corporation
 
 // See ../../COPYING for clarification regarding multiple authors

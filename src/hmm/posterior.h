@@ -29,9 +29,6 @@
 #include "util/kaldi-table.h"
 #include "hmm/transition-model.h"
 
-#include "ctc/cctc-transition-model.h"
-
-
 
 namespace kaldi {
 
@@ -188,11 +185,6 @@ void SortPosteriorByPdfs(const TransitionModel &tmodel,
 void ConvertPosteriorToPdfs(const TransitionModel &tmodel,
                             const Posterior &post_in,
                             Posterior *post_out);
-
-void ConvertPosteriorToPdfsCctc(const ctc::CctcTransitionModel &tmodel,
-                            const Posterior &post_in,
-                            Posterior *post_out);
-
 
 /// Converts a posterior over transition-ids to be a posterior
 /// over phones.

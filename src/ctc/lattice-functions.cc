@@ -23,7 +23,7 @@
 // limitations under the License.
 
 
-#include "lat/lattice-functions.h"
+#include "ctc/lattice-functions.h"
 #include "hmm/transition-model.h"
 #include "util/stl-utils.h"
 #include "base/kaldi-math.h"
@@ -31,6 +31,7 @@
 
 
 namespace kaldi {
+namespace ctc {
 using std::map;
 using std::vector;
 
@@ -1862,5 +1863,5 @@ void ComposeCompactLatticeDeterministic(
   }
   fst::Connect(composed_clat);
 }
-
+}
 }  // namespace kaldi

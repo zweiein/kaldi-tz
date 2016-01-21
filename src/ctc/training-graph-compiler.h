@@ -1,4 +1,4 @@
-// decoder/training-graph-compiler.h
+// ctc/training-graph-compiler.h
 
 // Copyright 2009-2011 Microsoft Corporation
 
@@ -16,8 +16,8 @@
 // MERCHANTABLITY OR NON-INFRINGEMENT.
 // See the Apache 2 License for the specific language governing permissions and
 // limitations under the License.
-#ifndef KALDI_DECODER_TRAINING_GRAPH_COMPILER_CCTC_H_
-#define KALDI_DECODER_TRAINING_GRAPH_COMPILER_CCTC_H_
+#ifndef KALDI_CTC_TRAINING_GRAPH_COMPILER_CCTC_H_
+#define KALDI_CTC_TRAINING_GRAPH_COMPILER_CCTC_H_
 
 #include "base/kaldi-common.h"
 #include "hmm/transition-model.h"

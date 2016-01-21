@@ -34,9 +34,6 @@
 #include "lat/kaldi-lattice.h"
 #include "itf/decodable-itf.h"
 
-#include "ctc/cctc-transition-model.h"
-
-
 namespace kaldi {
 
 /// This function iterates over the states of a topologically sorted lattice and
@@ -159,14 +156,6 @@ bool LatticeBoost(const TransitionModel &trans,
                   BaseFloat max_silence_error,
                   Lattice *lat);
 
-bool LatticeBoostCctc(const ctc::CctcTransitionModel &trans,
-                  const std::vector<int32> &alignment,
-                  const std::vector<int32> &silence_phones,
-                  BaseFloat b,
-                  BaseFloat max_silence_error,
-                  Lattice *lat);
-
-
 
 /**
    This function implements either the MPFE (minimum phone frame error) or SMBR
@@ -186,16 +175,6 @@ BaseFloat LatticeForwardBackwardMpeVariants(
     std::string criterion,
     bool one_silence_class,
     Posterior *post);
-
-BaseFloat LatticeForwardBackwardMpeVariantsCctc(
-    const ctc::CctcTransitionModel &trans,
-    const std::vector<int32> &silence_phones,
-    const Lattice &lat,
-    const std::vector<int32> &num_ali,
-    std::string criterion,
-    bool one_silence_class,
-    Posterior *post);
-
 
 /**
    This function can be used to compute posteriors for MMI, with a positive contribution
@@ -218,16 +197,6 @@ BaseFloat LatticeForwardBackwardMmi(
     bool convert_to_pdf_ids,
     bool cancel,
     Posterior *arc_post);
-
-BaseFloat LatticeForwardBackwardMmiCctc(
-    const ctc::CctcTransitionModel &tmodel,
-    const Lattice &lat,
-    const std::vector<int32> &num_ali,
-    bool drop_frames,
-    bool convert_to_pdf_ids,
-    bool cancel,
-    Posterior *post);
-
 
 
 /// This function takes a CompactLattice that should only contain a single
