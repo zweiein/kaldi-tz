@@ -11,7 +11,7 @@ TESTFILES = language-model-test cctc-transition-model-test \
 
 OBJFILES = language-model.o cctc-transition-model.o cctc-graph.o \
            cctc-supervision.o cctc-training.o cctc-test-utils.o \
-           cctc-decoder-wrappers.o training-graph-compiler.o lattice-function.o posterior.o
+           cctc-decoder-wrappers.o training-graph-compiler.o lattice-functions.o posterior.o
 
 LIBNAME = kaldi-ctc
 

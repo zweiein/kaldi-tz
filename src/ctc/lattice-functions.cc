@@ -1419,7 +1419,7 @@ bool RescoreCompactLatticeInternal(
     }
   }
   std::vector<int32> state_times;
-  int32 utt_len = kaldi::CompactLatticeStateTimes(*clat, &state_times);
+  int32 utt_len = CompactLatticeStateTimes(*clat, &state_times);
 
   std::vector<std::vector<ClatRescoreTuple> > time_to_state(utt_len);
 
@@ -1559,7 +1559,7 @@ bool RescoreLattice(DecodableInterface *decodable,
     }
   }
   std::vector<int32> state_times;
-  int32 utt_len = kaldi::LatticeStateTimes(*lat, &state_times);
+  int32 utt_len = LatticeStateTimes(*lat, &state_times);
 
   std::vector<std::vector<int32> > time_to_state(utt_len );
 
