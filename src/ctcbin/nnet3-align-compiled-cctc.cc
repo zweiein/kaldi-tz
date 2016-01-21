@@ -1,4 +1,4 @@
-// nnet3bin/nnet3-align-compiled-cctc.cc
+// ctc3bin/nnet3-align-compiled-cctc.cc
 
 // Copyright 2009-2012  Microsoft Corporation
 //                      Johns Hopkins University (author: Daniel Povey)
