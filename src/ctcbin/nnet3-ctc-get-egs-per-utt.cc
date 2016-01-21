@@ -238,12 +238,6 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
-    if (num_frames <= 0 || left_context < 0 || right_context < 0 ||
-        length_tolerance < 0 || frame_subsampling_factor <= 0)
-      KALDI_ERR << "One of the integer options is out of the allowed range.";
-    RoundUpNumFrames(frame_subsampling_factor,
-                     &num_frames, &num_frames_overlap);
-
     std::string feature_rspecifier = po.GetArg(1),
         supervision_rspecifier = po.GetArg(2),
         examples_wspecifier = po.GetArg(3);
