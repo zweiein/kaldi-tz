@@ -208,7 +208,6 @@ class NnetTrainerDiscriminative {
 
  double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
                                                 const ctc::CctcTransitionModel &tmodel,
-                                                const GeneralMatrix &supervision, 
                                                 const Lattice &clat,
                                                 const std::vector<int32> &num_ali,
                                                 Posterior *post);   
