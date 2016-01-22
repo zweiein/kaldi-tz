@@ -200,7 +200,6 @@ class NnetTrainerDiscriminative {
                                   const ctc::CctcTransitionModel &tmodel,
                                   const Lattice &clat,
                                   const std::vector<int32> &num_ali,
-                                  const GeneralMatrix &supervision,
                                   const std::string &output_name,
                                   bool supply_deriv,
                                   NnetComputer *computer,

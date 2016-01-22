@@ -106,10 +106,10 @@ void NnetTrainerDiscriminative::ProcessOutputs(const NnetCctcExample &eg, const 
 				              << opts_.silence_phones_str;
 	}
 	
-  std::vector<NnetIo>::const_iterator iter = eg.inputs.begin(),
-      end = eg.inputs.end();
+  std::vector<NnetCctcSupervision>::const_iterator iter = eg.outputs.begin(),
+      end = eg.outputs.end();
   for (; iter != end; ++iter) {
-    const NnetIo &io = *iter;
+    const NnetCctcSupervision &io = *iter;
     int32 node_index = nnet_->GetNodeIndex(io.name);
     KALDI_ASSERT(node_index >= 0);
     if (nnet_->IsOutputNode(node_index)) {
@@ -118,7 +118,7 @@ void NnetTrainerDiscriminative::ProcessOutputs(const NnetCctcExample &eg, const 
       bool supply_deriv = true;
       LatticeComputations(stats_,obj_type,
                           opts_,tmodel_,
-                          clat,num_ali,io.features,
+                          clat,num_ali,
                           io.name,supply_deriv, computer,
                           &tot_weight, &tot_objf);
     }
@@ -134,7 +134,6 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
                                   const ctc::CctcTransitionModel &tmodel,
                                   const Lattice &lat,
                                   const std::vector<int32> &num_ali,
-                                  const GeneralMatrix &supervision,
                                   const std::string &output_name,
                                   bool supply_deriv,
                                   NnetComputer *computer,
@@ -151,10 +150,11 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
    }
  
  const CuMatrixBase<BaseFloat> &output = computer->GetOutput(output_name);
- if (output.NumCols() != supervision.NumCols())
+ /*if (output.NumCols() != supervision.NumCols())
     KALDI_ERR << "Nnet versus example output dimension (num-classes) "
               << "mismatch for '" << output_name << "': " << output.NumCols()
               << " (nnet) vs. " << supervision.NumCols() << " (egs)\n";
+ */
  
  switch (objective_type) {
 	case kMpe: {
@@ -197,7 +197,7 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 	}
   }
   std::vector<int32> state_times;
- int32 T = LatticeStateTimes(clat, &state_times);
+ int32 T = ctc::LatticeStateTimes(clat, &state_times);
  KALDI_ASSERT(T == num_frames);
  StateId num_states = clat.NumStates();
  for (StateId s = 0; s < num_states; s++) {
@@ -228,7 +228,7 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 	   post = floor_val;
 	   num_floored++;
 	 }
-	 int32 pdf_id = requested_indexes[index].second;
+	 //int32 pdf_id = requested_indexes[index].second;
 	 //BaseFloat pseudo_loglike = Log(post / priors(pdf_id)) * opts.acoustic_scale;
 	 BaseFloat pseudo_loglike = Log(post / 1.0) * opts.acoustic_scale;
 	 answers[index] = pseudo_loglike;
