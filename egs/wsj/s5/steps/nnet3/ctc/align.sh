@@ -9,6 +9,8 @@
 # Begin configuration section.
 nj=4
 cmd=run.pl
+
+frame_subsampling_factor=3
 # Begin configuration.
 scale_opts="--transition-scale=1.0 --acoustic-scale=0.1 --self-loop-scale=0.1"
 beam=10
@@ -121,7 +123,7 @@ tra="ark:utils/sym2int.pl --map-oov $oov -f 2- $lang/words.txt $sdata/JOB/text|"
 $cmd JOB=1:$nj $dir/log/align.JOB.log \
   compile-train-graphs-cctc $dir/tree $srcdir/${iter}.mdl  $lang/L.fst "$tra" ark:- \| \
   nnet3-align-compiled-cctc $scale_opts $ivector_opts \
-    --beam=$beam --retry-beam=$retry_beam \
+    --beam=$beam --retry-beam=$retry_beam --frame-subsampling-factor=$frame_subsampling_factor \
     $srcdir/${iter}.mdl ark:- "$feats" "ark:|gzip -c >$dir/ali.JOB.gz" || exit 1;
 
 echo "$0: done aligning data."

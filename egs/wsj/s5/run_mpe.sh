@@ -10,71 +10,50 @@
 
 chunk_width=75         # for make_denlats.sh
 chunk_left_context=30
-
-stage=33  #0
-mpe_stage=-8  #-8
+stage=3
+mpe_stage=-4
 cmd=run.pl
 
-trans_model=exp/ctc/tri5b_tree_monophone/final.mdl
-trans_dir=exp/ctc/tri5b_tree_monophone
-tri_ali=$trans_dir
-graphdir=exp/ctc/lstm_i/graph_bd_tgpr_0.15
-modeldir=exp/ctc/lstm_i
+trans_model=exp/ctc/tri5b_tree/final.mdl
+ctc_trans_mdl=exp/ctc/lstm_h/0.ctc_trans_mdl
+graphdir=exp/ctc/lstm_h/graph_bd_tgpr_0.15
+modeldir=exp/ctc/lstm_h
+tri_ali=exp/ctc/tri5b_tree
+tri_latdir=exp/tri4b_lats_si284
 #tri_ali=${modeldir}_ali
 dir=${modeldir}_mpe
 
-if [ $stage -le 0 ]; then
- echo "get nnet3-am from nnet3-ctc"
-   nnet3-ctc-copy --raw=true $modeldir/final.mdl $modeldir/final.mdl.raw || exit 1;
-   #nnet3-am-init $trans_model $modeldir/final.mdl.raw $modeldir/final.mdl.nnet3am || exit 1;
- echo "train the transitions, set the priors"
-   $cmd $modeldir/log/get_nnet3am.log \
-     nnet3-am-init $trans_model $modeldir/final.mdl.raw - \| \
-     nnet3-am-train-transitions-cctc - "ark:gunzip -c $tri_ali/ali.*.gz|" $modeldir/final.mdl.nnet3am.linear || exit 1;
-     #---TO DO---
-     #replace objective "linear" with "mpe" to get final.mdl.nnet3am.mpe
-     #final.mdl.nnet3am -> final.mdl.nnet3am.mpe
-fi
+hmm_mdl=exp/ctc/tri5b_tree/final.mdl
 
-if [ ! -f  $modeldir/final.mdl.nnet3am ];then
-  echo "replace objective "linear" with "mpe" to get final.mdl.nnet3am.mpe, linked by final.mdl.nnet3am"
-  exit 1;
-fi
-
-if [ $stage -le 11 ]; then
+if [ $stage -le 1 ]; then
  echo "make alimgents"
- # refer to modeldir/final.mdl.nnet3am (or final.mdl)
-   steps/nnet3/ctc/align.sh --nj 30 --cmd "$decode_cmd" \
+   steps/nnet3/ctc/align.sh --nj 8 --cmd "$decode_cmd" --frame_subsampling_factor 3 \
      data/train data/lang_ctc $modeldir ${modeldir}_ali || exit 1;
 fi
 
-if [ $stage -le 22 ]; then
+   # --frames-per-chunk $chunk_width --extra-left-context $chunk_left_context \
+if [ $stage -le 2 ]; then
  echo "make lattices"
-#   steps/nnet3/ctc/make_denlats.sh  --nj 8 --cmd "$decode_cmd" \
-#     --frames-per-chunk $chunk_width --extra-left-context $chunk_left_context \
-#      $graphdir data/train $modeldir ${modeldir}_denlats || exit 1;
-   graphdir_tree=$trans_dir/graph_lang_test_bd_tgpr
-   utils/mkgraph.sh data/lang_test_bd_tgpr $trans_dir $graphdir_tree 
-   #modeldir_tree=exp/ctc/tri5b_tree
-   steps/nnet3/make_denlats.sh  --nj 30 --cmd "$decode_cmd" \
-      $graphdir_tree data/train $modeldir ${modeldir}_denlats || exit 1;
+   steps/nnet3/ctc/make_denlats.sh  --nj 8 --cmd "$decode_cmd" --frame_subsampling_factor 3 \
+    --frames-per-chunk $chunk_width --extra-left-context $chunk_left_context \
+      $graphdir data/train $modeldir ${modeldir}_denlats_sub1 || exit 1;
 fi
 
-if [ $stage -le 33 ]; then
-
+if [ $stage -le 3 ]; then
+ if [ ! -f $modeldir/final.mdl.softmax.mpe ];then
+   echo "$modeldir/final.mdl should have softmax instead of logsoftmax and mpe instead of linear, 
+        and final.mdl -> final.mdl.softmax.mpe"
+   exit 1;
+ fi
+ #$modeldir/final.mdl should have softmax instead of logsoftmax
  echo "mpe training"
-   steps/nnet3/ctc/train_discriminative.sh --cmd "$cuda_cmd" --learning-rate 0.000005 \
-     --num-jobs-nnet 4 --stage $mpe_stage --num-pdfs 193 \
+   steps/nnet3/ctc/train_discriminative.sh --cmd "$cuda_cmd" --train_cmd "$train_cmd" --learning-rate 0.000005 \
+     --num-jobs-nnet 4 --stage $mpe_stage --num_pdfs 2504 --hmm_mdl $hmm_mdl --frame_subsampling_factor 3 \
+     --tri_latdir $tri_latdir --ctc_trans_mdl $ctc_trans_mdl \
      data/train data/lang ${modeldir}_ali ${modeldir}_denlats \
-     $modeldir/final.mdl.nnet3am $dir || exit 1;
-
- echo "get nnet3-ctc from nnet3-am"
-   nnet3-am-copy --raw=true $dir/final.mdl $dir/final.mdl.raw || exit 1;
-   nnet3-ctc-copy --set-raw-nnet=$dir/final.mdl.raw $modeldir/0.ctc_trans_mdl $dir/final.mdl.ctc || exit 1;
-   mv $dir/final.mdl $dir/final.mdl.nnet3am
-   mv $dir/final.mdl.ctc $dir/final.mdl
-
+     $modeldir/final.mdl $dir || exit 1;
 fi
+
 
 exit 0;
 

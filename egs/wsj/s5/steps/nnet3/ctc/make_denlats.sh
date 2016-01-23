@@ -8,6 +8,8 @@
 # provide the --transform-dir option.
 
 # Begin configuration section.
+frame_subsampling_factor=1
+
 stage=1
 transform_dir=    # dir to find fMLLR transforms.
 nj=4 # number of decoding jobs.  If --transform-dir set, must match that number!
@@ -74,7 +76,7 @@ for f in $graphdir/CTC.fst $data/feats.scp $model $extra_files $srcdir/frame_sub
   [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
 
-frame_subsampling_factor=$(cat $srcdir/frame_subsampling_factor) || exit 1;
+#frame_subsampling_factor=$(cat $srcdir/frame_subsampling_factor) || exit 1;
 
 sdata=$data/split$nj;
 cmvn_opts=`cat $srcdir/cmvn_opts` || exit 1;

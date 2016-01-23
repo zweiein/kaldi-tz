@@ -6,6 +6,11 @@
 # of neural nets. 
 
 # Begin configuration section.
+ctc_trans_mdl=
+frame_subsampling_factor=3
+num_pdfs=
+hmm_mdl=
+tri_latdir=
 cmd=run.pl
 num_epochs=4       # Number of epochs of training
 learning_rate=0.008
@@ -99,7 +104,6 @@ alidir=$3
 denlatdir=$4
 src_model=$5
 dir=$6
-hmm_mdl=exp/ctc/tri5b_tree/final.mdl
 
 extra_files=
 [ ! -z $online_ivector_dir ] && \
@@ -258,7 +262,7 @@ if [ $stage -le -7 ]; then
     echo "$0: setting learning rate to $learning_rate = --num-jobs-nnet * --effective-lrate."
   fi
   $cmd $dir/log/convert.log \
-  nnet3-am-copy --learning-rate=$learning_rate "$src_model" $dir/0.mdl|| exit 1; 
+  nnet3-ctc-copy --learning-rate=$learning_rate "$src_model" $dir/0.mdl|| exit 1; 
 fi
 
 
@@ -273,10 +277,30 @@ if [ $stage -le -6 ] && [ -z "$degs_dir" ]; then
   done
 
 
-  $cmd $io_opts JOB=1:$nj $dir/log/get_egs.JOB.log \
-    nnet3-get-egs-per-utt --num-pdfs=2576 --left-context=2 --right-context=2 --compress=true "$feats" \
-    "ark,s,cs:gunzip -c $alidir/ali.JOB.gz | ali-to-pdf $hmm_mdl ark:- ark:- | ali-to-post ark:- ark:- |" ark:- \| \
-    nnet3-copy-egs $const_dim_opt ark:- $egs_list || exit 1;
+#  $cmd $io_opts JOB=1:$nj $dir/log/get_egs.JOB.log \
+#    nnet3-get-egs-per-utt-temp --num-pdfs=$num_pdfs --left-context=2 --right-context=2 --compress=true "$feats" \
+#    "ark,s,cs:gunzip -c $alidir/ali.JOB.gz | ali-to-pdf-fake $hmm_mdl ark:- ark:- | ali-to-post ark:- ark:- |" ark:- \| \
+#    nnet3-copy-egs $const_dim_opt ark:- $egs_list || exit 1;
+
+
+
+
+  # The examples will go round-robin to egs_list.
+  echo "$0: copying training tri4b lattices"
+  for id in $(seq $nj); do gunzip -c $tri_latdir/lat.$id.gz; done | \
+    lattice-copy ark:- ark,scp:$dir/tri_lat.ark,$dir/tri_lat.scp || exit 1;
+
+egs_opts="--left-context=2 --right-context=2 --frame-subsampling-factor=$frame_subsampling_factor --compress=true" 
+  $cmd JOB=1:$nj $dir/log/get_egs.JOB.log \
+    utils/filter_scp.pl $sdata/JOB/utt2spk $dir/tri_lat.scp \| \
+    lattice-align-phones --replace-output-symbols=true $tri_latdir/final.mdl scp:- ark:- \| \
+    ctc-get-supervision --lattice-input=true --frame-subsampling-factor=$frame_subsampling_factor $ctc_trans_mdl ark:- ark:- \| \
+    nnet3-ctc-get-egs-per-utt $egs_opts "$feats" ark,s,cs:- ark:- \| \
+    nnet3-ctc-copy-egs ark:- $egs_list || exit 1;
+
+
+
+
 fi
 
 if [ $stage -le -5 ] && [ -z "$degs_dir" ]; then
@@ -298,7 +322,7 @@ if [ $stage -le -5 ] && [ -z "$degs_dir" ]; then
       egs_list="$egs_list ark:$dir/degs/degs_tmp.JOB.$n.ark"
     done
     $cmd $io_opts JOB=1:$num_jobs_nnet $dir/log/split_egs.JOB.log \
-      nnet3-copy-egs --srand=JOB \
+      nnet3-ctc-copy-egs --srand=JOB \
         "ark:cat $dir/degs/degs_orig.JOB.*.ark|" $egs_list || exit 1;
     remove $dir/degs/degs_orig.*.*.ark
   fi
@@ -329,8 +353,8 @@ if [ $stage -le -4 ] && [ -z "$degs_dir" ]; then
 #   remove $dir/degs/degs_tmp.*.$n.ark
 # done
       $cmd JOB=1:$num_jobs_nnet $dir/log/shuffle.JOB.log \
-      nnet3-shuffle-egs --srand=JOB "ark:cat $dir/degs/degs_tmp.JOB.*.ark|" ark:- \| \
-      nnet3-copy-egs ark:- ark:$dir/degs/degs.JOB.ark || exit 1; 
+      nnet3-ctc-shuffle-egs --srand=JOB "ark:cat $dir/degs/degs_tmp.JOB.*.ark|" ark:- \| \
+      nnet3-ctc-copy-egs ark:- ark:$dir/degs/degs.JOB.ark || exit 1; 
  
 
 if [ -z "$degs_dir" ]; then
@@ -353,7 +377,7 @@ ali="ark:gunzip -c $alidir/ali.*.gz |"
 lats=$denlatdir/lat.scp
 
 for n in `seq 1 $num_jobs_nnet`; do
-    nnet3-copy-egs ark:$degs_dir/degs.$n.ark ark,scp:$dir/$n.ark,$dir/$n.scp;
+    nnet3-ctc-copy-egs ark:$degs_dir/degs.$n.ark ark,scp:$dir/$n.ark,$dir/$n.scp;
     /nfs/disk/perm/tools/caroline/utl/text/search_according_to_first_key.pl -c $denlatdir/lat.scp $dir/$n.scp > $dir/lat_tmp.$n.scp;
    
 done
@@ -380,7 +404,7 @@ while [ $x -lt $num_iters ]; do
        --one-silence-class=$one_silence_class --boost=$boost \
        --acoustic-scale=$acoustic_scale \
         $dir/$x.mdl "scp:$dir/lat.JOB.scp" "$ali" \
-        "ark:nnet3-copy-egs ark:$degs_dir/degs.JOB.ark ark:- |" \
+        "ark:nnet3-ctc-copy-egs ark:$degs_dir/degs.JOB.ark ark:- |" \
         $dir/$[$x+1].JOB.raw || exit 1;
     
 
@@ -388,11 +412,11 @@ while [ $x -lt $num_iters ]; do
    
    	$cmd $dir/log/average.$x.log \
     nnet3-average $nnets_list $dir/$[$x+1].raw || exit 1;
-    nnet3-am-copy --set-raw-nnet=$dir/$[$x+1].raw  $dir/$x.mdl $dir/$[$x+1].mdl || exit 1;
+    nnet3-ctc-copy --set-raw-nnet=$dir/$[$x+1].raw  $dir/$x.mdl $dir/$[$x+1].mdl || exit 1;
     s=$[$x+2];
     learning_rate_new=$(expr "scale=6;$learning_rate/$s" | bc);
 #	learning_rate_new=$[$learning_rate/$[$x+2]];
-	nnet3-am-copy --learning-rate=$learning_rate_new $dir/$[$x+1].mdl $dir/$[$x+1].mdl || exit 1;
+	nnet3-ctc-copy --learning-rate=$learning_rate_new $dir/$[$x+1].mdl $dir/$[$x+1].mdl || exit 1;
 
 #	if $modify_learning_rates; then
 #   $cmd $dir/log/modify_learning_rates.$x.log \
