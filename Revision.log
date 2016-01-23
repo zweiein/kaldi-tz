@@ -1,0 +1,33 @@
+
+
+----------------
+ali:
+
+ctcbin/compile-train-graphs-cctc.cc -> ctc/training-graph-compiler.*
+ctcbin/nnet3-align-compiled-cctc.cc
+
+----------------
+mpe：
+
+ctcbin/nnet3-ctc-get-egs-cctc.cc
+
+ctc/lattice-function.*
+    -> latticeBoostCctc()
+    -> -LatticeForwardBackwardMpeVariantsCctc()	 
+    -> LatticeForwardBackwardMmiCctc()
+		  
+ctc/posterior.*
+    -> ConvertPosteriorToPdfsCctc()
+
+bin/ali-to-pdf-fake.cc
+
+nnet3bin/nnet3-train-discriminative-cctc.cc -> nnet3/nnet-training-discriminative-cctc.*
+
+----------------
+
+Note: 
+
+priors are set equal for easy programming.
+
+----------------
+
