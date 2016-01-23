@@ -8,6 +8,7 @@
 # Begin configuration section.
 cmd=run.pl
 num_epochs=4       # Number of epochs of training
+num_iters=4
 learning_rate=0.008
 effective_lrate=    # If supplied, overrides the learning rate, which gets set to effective_lrate * num_jobs_nnet.
 acoustic_scale=0.1  # acoustic scale for MMI/MPFE/SMBR training.
@@ -333,40 +334,46 @@ if [ $stage -le -4 ] && [ -z "$degs_dir" ]; then
       nnet3-copy-egs ark:- ark:$dir/degs/degs.JOB.ark || exit 1; 
  
 
-if [ -z "$degs_dir" ]; then
-  degs_dir=$dir/degs
-fi
+ if [ -z "$degs_dir" ]; then
+   degs_dir=$dir/degs
+ fi
 
-num_iters=4;
 #num_iters=$[$num_epochs * $iters_per_epoch];
 
-echo "$0: Will train for $num_epochs epochs = $num_iters iterations"
+ echo "$0: Will train for $num_iters iterations"
 
-if [ $num_threads -eq 1 ]; then
- train_suffix="-simple" # this enables us to use GPU code if
+ if [ $num_threads -eq 1 ]; then
+   train_suffix="-simple" # this enables us to use GPU code if
                         # we have just one thread.
-else
+ else
   train_suffix="-parallel --num-threads=$num_threads"
-fi
-ali="ark:gunzip -c $alidir/ali.*.gz |"
+ fi
+ ali="ark:gunzip -c $alidir/ali.*.gz |"
 
-lats=$denlatdir/lat.scp
+ lats=$denlatdir/lat.scp
 
-for n in `seq 1 $num_jobs_nnet`; do
+ for n in `seq 1 $num_jobs_nnet`; do
     nnet3-copy-egs ark:$degs_dir/degs.$n.ark ark,scp:$dir/$n.ark,$dir/$n.scp;
     /nfs/disk/perm/tools/caroline/utl/text/search_according_to_first_key.pl -c $denlatdir/lat.scp $dir/$n.scp > $dir/lat_tmp.$n.scp;
    
-done
+ done
 
-for n in `seq 1 $num_jobs_nnet`; do
+ for n in `seq 1 $num_jobs_nnet`; do
     cat $dir/$n.scp | while read line
     do
     	id=`echo $line | cut -d' ' -f1`
 	    grep "$id" $dir/lat_tmp.$n.scp >> $dir/lat.$n.scp
 	done
-done
+ done
 
 fi
+
+
+
+if [ -z "$degs_dir" ]; then
+  degs_dir=$dir/degs
+fi
+ali="ark:gunzip -c $alidir/ali.*.gz |"
 
 x=0
 while [ $x -lt $num_iters ]; do
