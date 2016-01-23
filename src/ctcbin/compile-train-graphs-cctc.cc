@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
     ParseOptions po(usage);
 
     ctc::TrainingGraphCompilerOptions gopts;
-    int32 batch_size = 1; //250
+    int32 batch_size = 250;
     gopts.transition_scale = 0.0;  // Change the default to 0.0 since we will generally add the
     // transition probs in the alignment phase (since they change eacm time)
     gopts.self_loop_scale = 0.0;  // Ditto for self-loop probs.
@@ -84,12 +84,7 @@ int main(int argc, char *argv[]) {
     ReadKaldiObject(tree_rxfilename, &ctx_dep);
 
     ctc::CctcTransitionModel trans_model;
-    //ReadKaldiObject(model_rxfilename, &trans_model);
-    {
-      bool binary;
-      Input ki(model_rxfilename, &binary);
-      trans_model.Read(ki.Stream(), binary);
-    }
+    ReadKaldiObject(model_rxfilename, &trans_model);
 
     // need VectorFst because we will change it by adding subseq symbol.
     VectorFst<StdArc> *lex_fst = fst::ReadFstKaldi(lex_rxfilename);

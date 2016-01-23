@@ -206,8 +206,10 @@ bool TrainingGraphCompilerCctc::CompileGraphs(
     KALDI_ASSERT(phone2word_fst.Start() != kNoStateId &&
                  "Perhaps you have words missing in your lexicon?");    
     ShiftPhonesAndAddBlanks(&phone2word_fst);
+    VectorFst<StdArc> fst_tmp;
     CreateCctcDecodingFst(trans_model_, phone_lm_weight_,
-                               phone2word_fst, (*out_fsts)[i] );
+                               phone2word_fst, &fst_tmp);
+    (*out_fsts)[i] = fst_tmp.Copy();
    
     /* VectorFst<StdArc> ctx2word_fst;
     ComposeContextFst(*cfst, phone2word_fst, &ctx2word_fst);
