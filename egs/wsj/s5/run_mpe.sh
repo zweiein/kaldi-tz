@@ -30,15 +30,7 @@ if [ $stage -le 0 ]; then
  echo "train the transitions, set the priors"
    $cmd $modeldir/log/get_nnet3am.log \
      nnet3-am-init $trans_model $modeldir/final.mdl.raw - \| \
-     nnet3-am-train-transitions-cctc - "ark:gunzip -c $tri_ali/ali.*.gz|" $modeldir/final.mdl.nnet3am.linear || exit 1;
-     #---TO DO---
-     #replace objective "linear" with "mpe" to get final.mdl.nnet3am.mpe
-     #final.mdl.nnet3am -> final.mdl.nnet3am.mpe
-fi
-
-if [ ! -f  $modeldir/final.mdl.nnet3am ];then
-  echo "replace objective "linear" with "mpe" to get final.mdl.nnet3am.mpe, linked by final.mdl.nnet3am"
-  exit 1;
+     nnet3-am-train-transitions-cctc - "ark:gunzip -c $tri_ali/ali.*.gz|" $modeldir/final.mdl.nnet3am.linear || exit 1;   
 fi
 
 if [ $stage -le 11 ]; then
@@ -50,14 +42,19 @@ fi
 
 if [ $stage -le 22 ]; then
  echo "make lattices"
-#   steps/nnet3/ctc/make_denlats.sh  --nj 8 --cmd "$decode_cmd" \
-#     --frames-per-chunk $chunk_width --extra-left-context $chunk_left_context \
-#      $graphdir data/train $modeldir ${modeldir}_denlats || exit 1;
    graphdir_tree=$trans_dir/graph_lang_test_bd_tgpr
    utils/mkgraph.sh data/lang_test_bd_tgpr $trans_dir $graphdir_tree 
-   #modeldir_tree=exp/ctc/tri5b_tree
    steps/nnet3/make_denlats.sh  --nj 30 --cmd "$decode_cmd" \
       $graphdir_tree data/train $modeldir ${modeldir}_denlats || exit 1;
+fi
+
+if [ ! -f  $modeldir/final.mdl.nnet3am ];then
+  echo "replace objective "linear" with "mpe" and  SoftmaxComponent instead of LogSoftmaxComponent 
+  to get final.mdl.nnet3am.mpe, linked by final.mdl.nnet3am"
+     nnet3-am-copy --binary=false $modeldir/final.mdl.nnet3am.linear $modeldir/final.mdl.nnet3am.mpe
+     sed -i 's/LogSoftmaxComponent/SoftmaxComponent/g' $modeldir/final.mdl.nnet3am.mpe
+     sed -i 's/linear/mpe/g' $modeldir/final.mdl.nnet3am.mpe
+     nnet3-am-copy $modeldir/final.mdl.nnet3am.mpe $modeldir/final.mdl.nnet3am
 fi
 
 if [ $stage -le 33 ]; then
@@ -73,6 +70,11 @@ if [ $stage -le 33 ]; then
    nnet3-ctc-copy --set-raw-nnet=$dir/final.mdl.raw $modeldir/0.ctc_trans_mdl $dir/final.mdl.ctc || exit 1;
    mv $dir/final.mdl $dir/final.mdl.nnet3am
    mv $dir/final.mdl.ctc $dir/final.mdl
+
+   echo "SoftmaxComponent back to LogSoftmaxComponent for decoding"
+   nnet3-ctc-copy --binary=false $dir/final.mdl $dir/final.mdl
+   sed -i 's/SoftmaxComponent/LogSoftmaxComponent/g'  $dir/final.mdl
+   nnet3-ctc-copy $dir/final.mdl $dir/final.mdl
 
 fi
 
