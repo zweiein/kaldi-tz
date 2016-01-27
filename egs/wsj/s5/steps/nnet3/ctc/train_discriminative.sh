@@ -286,7 +286,7 @@ if [ $stage -le -6 ] && [ -z "$degs_dir" ]; then
 
   # The examples will go round-robin to egs_list.
   echo "$0: copying training tri4b lattices"
-  tri_nj=$tri_latdir/num_jobs
+  tri_nj=$(cat $tri_latdir/num_jobs)
   for id in $(seq $tri_nj); do gunzip -c $tri_latdir/lat.$id.gz; done | \
     lattice-copy ark:- ark,scp:$dir/tri_lat.ark,$dir/tri_lat.scp || exit 1;
 
