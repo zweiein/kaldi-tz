@@ -53,7 +53,7 @@ if [ $stage -le 3 ]; then
  dir=${dir}_lr0.0002
  echo "mpe training"
    steps/nnet3/ctc/train_discriminative.sh --cmd "$cuda_cmd" --train_cmd "$train_cmd" --learning-rate 0.0002 \
-     --num-jobs-nnet 4 --stage $mpe_stage --num_pdfs 2504 --hmm_mdl $hmm_mdl --frame_subsampling_factor 3 \
+     --num-jobs-nnet 4 --stage $mpe_stage --hmm_mdl $hmm_mdl --frame_subsampling_factor 3 \
      --tri_latdir $tri_latdir --ctc_trans_mdl $ctc_trans_mdl \
      data/train data/lang ${modeldir}_ali ${modeldir}_denlats \
      $modeldir/final.mdl $dir || exit 1;
