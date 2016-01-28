@@ -58,7 +58,7 @@ if [ $stage -le 3 ]; then
      data/train data/lang ${modeldir}_ali ${modeldir}_denlats \
      $modeldir/final.mdl $dir || exit 1;
 
- if [ -f $dir ]; then
+ if [ -f $dir/final.mdl ]; then
    echo "SoftmaxComponent back to LogSoftmaxComponent for decoding"
    nnet3-ctc-copy --binary=false $dir/final.mdl $dir/final.mdl.logsoftmax
    sed -i 's/SoftmaxComponent/LogSoftmaxComponent/g'  $dir/final.mdl.logsoftmax
