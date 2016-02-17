@@ -360,11 +360,12 @@ lats=$denlatdir/lat.scp
 
 for n in `seq 1 $num_jobs_nnet`; do
     nnet3-copy-egs ark:$degs_dir/degs.$n.ark ark,scp:$dir/$n.ark,$dir/$n.scp;
-    search_according_to_first_key.pl -c $denlatdir/lat.scp $dir/$n.scp > $dir/lat_tmp.$n.scp;
+    search_according_to_first_key.pl $denlatdir/lat.scp $dir/$n.scp > $dir/lat_tmp.$n.scp;
    
 done
 
 for n in `seq 1 $num_jobs_nnet`; do
+    rm $dir/lat.$n.scp
     cat $dir/$n.scp | while read line
     do
     	id=`echo $line | cut -d' ' -f1`
