@@ -6,6 +6,12 @@
 # of neural nets. 
 
 # Begin configuration section.
+
+cpu_cmd=run.pl
+
+num_pdfs=6975
+left_context=19
+right_context=14
 cmd=run.pl
 num_epochs=4       # Number of epochs of training
 learning_rate=0.008
@@ -99,7 +105,7 @@ alidir=$3
 denlatdir=$4
 src_model=$5
 dir=$6
-hmm_mdl=exp/ctc/tri5b_tree/final.mdl
+hmm_mdl=exp/chain/tdnn_2o/final.mdl
 
 extra_files=
 [ ! -z $online_ivector_dir ] && \
@@ -273,8 +279,8 @@ if [ $stage -le -6 ] && [ -z "$degs_dir" ]; then
   done
 
 
-  $cmd $io_opts JOB=1:$nj $dir/log/get_egs.JOB.log \
-    nnet3-get-egs-per-utt --num-pdfs=2576 --left-context=2 --right-context=2 --compress=true "$feats" \
+  $cpu_cmd $io_opts JOB=1:$nj $dir/log/get_egs.JOB.log \
+    nnet3-get-egs-per-utt --num-pdfs=$num_pdfs --left-context=$left_context --right-context=$right_context --compress=true "$feats" \
     "ark,s,cs:gunzip -c $alidir/ali.JOB.gz | ali-to-pdf $hmm_mdl ark:- ark:- | ali-to-post ark:- ark:- |" ark:- \| \
     nnet3-copy-egs $const_dim_opt ark:- $egs_list || exit 1;
 fi
@@ -354,7 +360,7 @@ lats=$denlatdir/lat.scp
 
 for n in `seq 1 $num_jobs_nnet`; do
     nnet3-copy-egs ark:$degs_dir/degs.$n.ark ark,scp:$dir/$n.ark,$dir/$n.scp;
-    /nfs/disk/perm/tools/caroline/utl/text/search_according_to_first_key.pl -c $denlatdir/lat.scp $dir/$n.scp > $dir/lat_tmp.$n.scp;
+    search_according_to_first_key.pl -c $denlatdir/lat.scp $dir/$n.scp > $dir/lat_tmp.$n.scp;
    
 done
 
@@ -362,8 +368,8 @@ for n in `seq 1 $num_jobs_nnet`; do
     cat $dir/$n.scp | while read line
     do
     	id=`echo $line | cut -d' ' -f1`
-	    grep "$id" $dir/lat_tmp.$n.scp >> $dir/lat.$n.scp
-	done
+            grep "$id" $dir/lat_tmp.$n.scp >> $dir/lat.$n.scp
+        done
 done
 
 fi
