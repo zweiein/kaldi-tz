@@ -29,6 +29,8 @@
 #include "hmm/transition-model.h"
 #include "lat/kaldi-lattice.h"
 
+#include "nnet3/nnet-chain-example.h"
+
 namespace kaldi {
 namespace nnet3 {
 
@@ -133,12 +135,12 @@ class NnetTrainerDiscriminative {
                                         Nnet *nnet, 
                                         NnetDiscriminativeStats *stats);
 
-  void Train (const NnetExample &eg, const Lattice &clat, const std::vector<int32> &num_ali);
+  void Train (const NnetChainExample &eg, const Lattice &clat, const std::vector<int32> &num_ali);
 
   ~NnetTrainerDiscriminative ();
   
  private:
-  void ProcessOutputs(const NnetExample &eg, const Lattice &clat, 
+  void ProcessOutputs(const NnetChainExample &eg, const Lattice &clat, 
                             const std::vector<int32> &num_ali, NnetComputer *computer);
   const NnetTrainerOptions &opts_;
   const AmNnetSimple &am_nnet_;
