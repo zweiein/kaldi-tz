@@ -369,7 +369,7 @@ for n in `seq 1 $num_jobs_nnet`; do
     cat $dir/$n.scp | while read line
     do
     	id=`echo $line | cut -d' ' -f1`
-            grep "$id" $dir/lat_tmp.$n.scp >> $dir/lat.$n.scp
+            grep "${id} " $dir/lat_tmp.$n.scp >> $dir/lat.$n.scp
         done
 done
 
@@ -387,7 +387,7 @@ while [ $x -lt $num_iters ]; do
        --one-silence-class=$one_silence_class --boost=$boost \
        --acoustic-scale=$acoustic_scale \
         $dir/$x.mdl "scp:$dir/lat.JOB.scp" "$ali" \
-        "ark:nnet3-copy-egs ark:$degs_dir/degs.JOB.ark ark:- |" \
+        "ark:nnet3-copy-egs scp:$dir/JOB.scp ark:- |" \
         $dir/$[$x+1].JOB.raw || exit 1;
     
 
