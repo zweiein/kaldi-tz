@@ -1,0 +1,3 @@
+WARNING: 
+
+When doing mpe, priors in nnet3/nnet-training-discriminative.cc should be ignored(set 1.0).
