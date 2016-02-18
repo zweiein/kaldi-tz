@@ -106,10 +106,10 @@ void NnetTrainerDiscriminative::ProcessOutputs(const NnetChainExample &eg, const
 				              << opts_.silence_phones_str;
 	}
 	
-  std::vector<NnetIo>::const_iterator iter = eg.inputs.begin(),
-      end = eg.inputs.end();
+  std::vector<NnetChainSupervision>::const_iterator iter = eg.outputs.begin(),
+      end = eg.outputs.end();;
   for (; iter != end; ++iter) {
-    const NnetIo &io = *iter;
+    const NnetChainSupervision &io = *iter;
     int32 node_index = nnet_->GetNodeIndex(io.name);
     KALDI_ASSERT(node_index >= 0);
     if (nnet_->IsOutputNode(node_index)) {
@@ -118,7 +118,7 @@ void NnetTrainerDiscriminative::ProcessOutputs(const NnetChainExample &eg, const
       bool supply_deriv = true;
       LatticeComputations(stats_,obj_type,
                           opts_,am_nnet_,tmodel_,
-                          clat,num_ali,io.features,
+                          clat,num_ali,
                           io.name,supply_deriv, computer,
                           &tot_weight, &tot_objf);
     }
@@ -135,7 +135,6 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
                                   const TransitionModel &tmodel,
                                   const Lattice &lat,
                                   const std::vector<int32> &num_ali,
-                                  const GeneralMatrix &supervision,
                                   const std::string &output_name,
                                   bool supply_deriv,
                                   NnetComputer *computer,
@@ -152,10 +151,11 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
    }
  
  const CuMatrixBase<BaseFloat> &output = computer->GetOutput(output_name);
- if (output.NumCols() != supervision.NumCols())
+ /* if (output.NumCols() != supervision.NumCols())
     KALDI_ERR << "Nnet versus example output dimension (num-classes) "
               << "mismatch for '" << output_name << "': " << output.NumCols()
               << " (nnet) vs. " << supervision.NumCols() << " (egs)\n";
+ */
  
  switch (objective_type) {
 	case kMpe: {
@@ -270,7 +270,7 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 
 	// Get the MPE or MMI posteriors.
 	Posterior post;
-	stats->tot_den_objf += eg_weight * GetDiscriminativePosteriors(opts,am_nnet,tmodel,supervision,clat,num_ali,&post);
+	stats->tot_den_objf += eg_weight * GetDiscriminativePosteriors(opts,am_nnet,tmodel,clat,num_ali,&post);
 	ScalePosterior(eg_weight, &post);
 	double tot_num_post = 0.0, tot_den_post = 0.0;
 	  std::vector<MatrixElement<BaseFloat> > sv_labels;
@@ -315,7 +315,6 @@ void LatticeComputations (NnetDiscriminativeStats *stats,
 double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
                                                 const AmNnetSimple &am_nnet,
                                                 const TransitionModel &tmodel,
-                                                const GeneralMatrix &supervision, 
                                                 const Lattice &clat,
                                                 const std::vector<int32> &num_ali,
                                                 Posterior *post) {

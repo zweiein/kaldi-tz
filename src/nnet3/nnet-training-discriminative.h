@@ -200,7 +200,6 @@ class NnetTrainerDiscriminative {
                                   const TransitionModel &tmodel,
                                   const Lattice &clat,
                                   const std::vector<int32> &num_ali,
-                                  const GeneralMatrix &supervision,
                                   const std::string &output_name,
                                   bool supply_deriv,
                                   NnetComputer *computer,
@@ -210,7 +209,6 @@ class NnetTrainerDiscriminative {
  double GetDiscriminativePosteriors(const NnetTrainerOptions &opts,
                                                 const AmNnetSimple &am_nnet,
                                                 const TransitionModel &tmodel,
-                                                const GeneralMatrix &supervision, 
                                                 const Lattice &clat,
                                                 const std::vector<int32> &num_ali,
                                                 Posterior *post);   
