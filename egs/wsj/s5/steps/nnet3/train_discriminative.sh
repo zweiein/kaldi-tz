@@ -387,7 +387,7 @@ while [ $x -lt $num_iters ]; do
        --one-silence-class=$one_silence_class --boost=$boost \
        --acoustic-scale=$acoustic_scale \
         $dir/$x.mdl "scp:$dir/lat.JOB.scp" "$ali" \
-        "ark:nnet3-copy-egs scp:$dir/JOB.ark ark:- |" \
+        "ark:nnet3-copy-egs scp:$dir/JOB.scp ark:- |" \
         $dir/$[$x+1].JOB.raw || exit 1;
     
 
