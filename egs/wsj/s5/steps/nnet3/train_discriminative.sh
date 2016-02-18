@@ -369,7 +369,7 @@ for n in `seq 1 $num_jobs_nnet`; do
     cat $dir/$n.scp | while read line
     do
     	id=`echo $line | cut -d' ' -f1`
-            grep "${id} " $dir/lat_tmp.$n.scp >> $dir/lat.$n.scp
+            grep "^${id} " $dir/lat_tmp.$n.scp >> $dir/lat.$n.scp
         done
 done
 
