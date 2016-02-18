@@ -1,3 +1,5 @@
 WARNING: 
 
 When doing mpe, priors in nnet3/nnet-training-discriminative.cc should be ignored(set 1.0).
+
+frame-subsampling-factor should be considered when doing ali and denlats, as new nnet3 already supports that.
