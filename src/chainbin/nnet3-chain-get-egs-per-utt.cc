@@ -1,4 +1,4 @@
-// chainbin/nnet3-chain-get-egs.cc
+// chainbin/nnet3-chain-get-egs-per-utt.cc
 
 // Copyright      2015  Johns Hopkins University (author:  Daniel Povey)
 
@@ -165,7 +165,8 @@ static bool ProcessFile(const fst::StdVectorFst &normalization_fst,
       nnet_chain_eg.Compress();
 
     std::ostringstream os;
-    os << utt_id << "-" << range_start;
+    //os << utt_id << "-" << range_start;
+    os << utt_id;
 
     std::string key = os.str(); // key is <utt_id>-<frame_id>
 
@@ -270,12 +271,6 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
-    if (num_frames <= 0 || left_context < 0 || right_context < 0 ||
-        length_tolerance < 0 || frame_subsampling_factor <= 0)
-      KALDI_ERR << "One of the integer options is out of the allowed range.";
-    RoundUpNumFrames(frame_subsampling_factor,
-                     &num_frames, &num_frames_overlap);
-
     std::string
         normalization_fst_rxfilename,
         feature_rspecifier,
@@ -337,6 +332,14 @@ int main(int argc, char *argv[]) {
           num_err++;
           continue;
         }
+        //each egs contains all frames
+        num_frames = feats.NumRows();
+        if (num_frames <= 0 || left_context < 0 || right_context < 0 ||
+            length_tolerance < 0 || frame_subsampling_factor <= 0)
+          KALDI_ERR << "One of the integer options is out of the allowed range.";
+        RoundUpNumFrames(frame_subsampling_factor,
+                     &num_frames, &num_frames_overlap);
+        
         if (ProcessFile(normalization_fst, feats, ivector_feats, supervision,
                         key, compress, left_context, right_context, num_frames,
                         num_frames_overlap, frame_subsampling_factor,
