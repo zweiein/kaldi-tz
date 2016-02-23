@@ -78,6 +78,7 @@ realign_times=          # List of times on which we realign.  Each time is
 num_jobs_align=30       # Number of jobs for realignment
 # End configuration section.
 frames_per_eg=8 # to be passed on to get_egs.sh
+temperature=1.0 # for soft targets, knowledge distilling
 
 trap 'for pid in $(jobs -pr); do kill -KILL $pid; done' INT QUIT TERM
 
@@ -147,7 +148,7 @@ for f in $data/feats.scp $lang/L.fst $alidir/ali.1.gz $alidir/final.mdl $alidir/
 done
 
 # Get raw of ref_mdl
-ref_raw=$dir/ref_raw
+ref_raw=$dir/ref_mdl.raw
 nnet3-am-copy --raw=true $ref_mdl $ref_raw
 
 # Set some variables.
@@ -526,7 +527,7 @@ while [ $x -lt $num_iters ]; do
         soft_targets="ark:nnet3-compute-from-egs $ref_raw \"$final_egs\" ark:- |"
 
         $cmd $train_queue_opt $dir/log/train.$x.$n.log \
-          nnet3-train-soft $parallel_train_opts \
+          nnet3-train-soft $parallel_train_opts --temperature=$temperature \
           --max-param-change=$max_param_change "$raw" \
           "$final_egs" "$soft_targets" \
           $dir/$[$x+1].$n.raw || touch $dir/.error &
