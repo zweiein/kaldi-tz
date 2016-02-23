@@ -86,8 +86,8 @@ echo "$0 $@"  # Print the command line for logging
 if [ -f path.sh ]; then . ./path.sh; fi
 . parse_options.sh || exit 1;
 
-if [ $# != 4 ]; then
-  echo "Usage: $0 [opts] <data> <lang> <ali-dir> <exp-dir>"
+if [ $# != 5 ]; then
+  echo "Usage: $0 [opts] <data> <lang> <ali-dir> <refer-model> <exp-dir>"
   echo " e.g.: $0 data/train data/lang exp/tri3_ali exp/tri4_nnet"
   echo ""
   echo "Main options (for others, see top of script file)"
@@ -133,7 +133,8 @@ fi
 data=$1
 lang=$2
 alidir=$3
-dir=$4
+ref_mdl=$4
+dir=$5
 
 if [ ! -z "$realign_times" ]; then
   [ -z "$align_cmd" ] && echo "$0: realign_times specified but align_cmd not specified" && exit 1
@@ -141,10 +142,13 @@ if [ ! -z "$realign_times" ]; then
 fi
 
 # Check some files.
-for f in $data/feats.scp $lang/L.fst $alidir/ali.1.gz $alidir/final.mdl $alidir/tree; do
+for f in $data/feats.scp $lang/L.fst $alidir/ali.1.gz $alidir/final.mdl $alidir/tree $ref_mdl; do
   [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
 
+# Get raw of ref_mdl
+ref_raw=$dir/ref_raw
+nnet3-am-copy --raw=true $ref_mdl $ref_raw
 
 # Set some variables.
 num_leaves=`tree-info $alidir/tree 2>/dev/null | grep num-pdfs | awk '{print $2}'` || exit 1
@@ -518,10 +522,13 @@ while [ $x -lt $num_iters ]; do
         # same archive with different frame indexes will give similar gradients,
         # so we want to separate them in time.
 
+        final_egs="ark:nnet3-copy-egs --frame=$frame $context_opts ark:$cur_egs_dir/egs.$archive.ark ark:- | nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$x ark:- ark:-| nnet3-merge-egs --minibatch-size=$this_minibatch_size --discard-partial-minibatches=true ark:- ark:- |"
+        soft_targets="ark:nnet3-compute-from-egs $ref_raw \"$final_egs\" ark:- |"
+
         $cmd $train_queue_opt $dir/log/train.$x.$n.log \
-          nnet3-train $parallel_train_opts \
+          nnet3-train-soft $parallel_train_opts \
           --max-param-change=$max_param_change "$raw" \
-          "ark:nnet3-copy-egs --frame=$frame $context_opts ark:$cur_egs_dir/egs.$archive.ark ark:- | nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$x ark:- ark:-| nnet3-merge-egs --minibatch-size=$this_minibatch_size --discard-partial-minibatches=true ark:- ark:- |" \
+          "$final_egs" "$soft_targets" \
           $dir/$[$x+1].$n.raw || touch $dir/.error &
       done
       wait
