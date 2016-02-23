@@ -1,4 +1,4 @@
-// nnet3bin/nnet3-train.cc
+// nnet3bin/nnet3-train-soft.cc
 
 // Copyright 2015  Johns Hopkins University (author: Daniel Povey)
 
@@ -36,25 +36,27 @@ int main(int argc, char *argv[]) {
         "use it with a GPU); see nnet3-train-parallel for multi-threaded training\n"
         "that is better suited to CPUs.\n"
         "\n"
-        "Usage:  nnet3-train [options] <raw-model-in> <training-examples-in> <raw-model-out>\n"
+        "Usage:  nnet3-train-soft [options] <raw-model-in> <training-examples-in> <soft-targets> <raw-model-out>\n"
         "\n"
         "e.g.:\n"
-        "nnet3-train 1.raw 'ark:nnet3-merge-egs 1.egs ark:-|' 2.raw\n";
+        "nnet3-train-soft 1.raw 'ark:nnet3-merge-egs 1.egs ark:-|' 1.ark 2.raw\n";
 
     bool binary_write = true;
     std::string use_gpu = "yes";
+    BaseFloat temperature = 1.0;
     NnetTrainerOptions train_config;
 
     ParseOptions po(usage);
     po.Register("binary", &binary_write, "Write output in binary mode");
     po.Register("use-gpu", &use_gpu,
                 "yes|no|optional|wait, only has effect if compiled with CUDA");
+    po.Register("temperature", &temperature, "temperature for soft_targets in knowledge distilling");
 
     train_config.Register(&po);
 
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 3) {
+    if (po.NumArgs() != 4) {
       po.PrintUsage();
       exit(1);
     }
@@ -65,17 +67,31 @@ int main(int argc, char *argv[]) {
 
     std::string nnet_rxfilename = po.GetArg(1),
         examples_rspecifier = po.GetArg(2),
-        nnet_wxfilename = po.GetArg(3);
+        soft_targets_rspecifier = po.GetArg(3),
+        nnet_wxfilename = po.GetArg(4);
 
     Nnet nnet;
     ReadKaldiObject(nnet_rxfilename, &nnet);
 
-    NnetTrainer trainer(train_config, &nnet);
+    NnetTrainerSoft trainer(train_config, &nnet);
 
-    SequentialNnetExampleReader example_reader(examples_rspecifier);
+    SequentialNnetExampleReader example_reader(examples_rspecifier);    
+    SequentialBaseFloatMatrixReader soft_reader(soft_targets_rspecifier);
 
-    for (; !example_reader.Done(); example_reader.Next())
-      trainer.Train(example_reader.Value());
+    for (; !example_reader.Done() && !soft_reader.Done(); example_reader.Next(), soft_reader.Next()) {
+        if (example_reader.Key() != soft_reader.Key()) {
+            KALDI_WARN << utt << ", missing soft targets";
+            continue;
+        }
+        // knowledge distilling for soft targets
+        CuMatrixBase<BaseFloat> soft_targets_cu= CuMatrixBase<BaseFloat>(soft_reader.Value());
+        soft_targets_cu.Scale( 1.0 / temperature );
+        CuMatrixBase<BaseFloat> soft_targets_tmp;
+        soft_targets_tmp.ApplySoftMaxPerRow(soft_targets_cu);
+        const Matrix<BaseFloat>& soft_targets = Matrix<BaseFloat>(soft_targets_tmp);
+        
+        trainer.Train(example_reader.Value(), GeneralMatrix(soft_targets));
+    }
 
     bool ok = trainer.PrintTotalStats();
 

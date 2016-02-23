@@ -155,6 +155,52 @@ class NnetTrainer {
   unordered_map<std::string, ObjectiveFunctionInfo, StringHasher> objf_info_;
 };
 
+
+/** This class is for single-threaded training of neural nets using
+    standard objective functions such as cross-entropy (implemented with
+    logsoftmax nonlinearity and a linear objective function) and quadratic loss.
+
+    Something that we should do in the future is to make it possible to have
+    two different threads, one for the compilation, and one for the computation.
+    This would only improve efficiency in the cases where the structure of the
+    input example was different each time, which isn't what we expect to see in
+    speech-recognition training.  (If the structure is the same each time,
+    the CachingOptimizingCompiler notices this and uses the computation from
+    last time).
+ */
+class NnetTrainerSoft {
+ public:
+  NnetTrainerSoft(const NnetTrainerOptions &config,
+              Nnet *nnet);
+
+  // train on one minibatch.
+  void Train(const NnetExample &eg, const GeneralMatrix &soft_targets);
+
+  // Prints out the final stats, and return true if there was a nonzero count.
+  bool PrintTotalStats() const;
+
+  ~NnetTrainerSoft();
+ private:
+  void ProcessOutputs(const NnetExample &eg,
+                      const GeneralMatrix &soft_targets,
+                      NnetComputer *computer);
+
+  const NnetTrainerOptions config_;
+  Nnet *nnet_;
+  Nnet *delta_nnet_;  // Only used if momentum != 0.0.  nnet representing
+                      // accumulated parameter-change (we'd call this
+                      // gradient_nnet_, but due to natural-gradient update,
+                      // it's better to consider it as a delta-parameter nnet.
+  CachingOptimizingCompiler compiler_;
+
+  // This code supports multiple output layers, even though in the
+  // normal case there will be just one output layer named "output".
+  // So we store the objective functions per output layer.
+  int32 num_minibatches_processed_;
+
+  unordered_map<std::string, ObjectiveFunctionInfo, StringHasher> objf_info_;
+};
+
 /**
    This function computes the objective function, and if supply_deriv = true,
    supplies its derivative to the NnetComputation object.

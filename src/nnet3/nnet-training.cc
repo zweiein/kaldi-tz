@@ -119,6 +119,104 @@ bool NnetTrainer::PrintTotalStats() const {
   return ans;
 }
 
+
+NnetTrainerSoft::NnetTrainerSoft(const NnetTrainerOptions &config,
+                         Nnet *nnet):
+    config_(config),
+    nnet_(nnet),
+    compiler_(*nnet, config_.optimize_config),
+    num_minibatches_processed_(0) {
+  if (config.zero_component_stats)
+    ZeroComponentStats(nnet);
+  if (config.momentum == 0.0 && config.max_param_change == 0.0) {
+    delta_nnet_= NULL;
+  } else {
+    KALDI_ASSERT(config.momentum >= 0.0 &&
+                 config.max_param_change >= 0.0);
+    delta_nnet_ = nnet_->Copy();
+    bool is_gradient = false;  // setting this to true would disable the
+                               // natural-gradient updates.
+    SetZero(is_gradient, delta_nnet_);
+  }
+}
+
+
+void NnetTrainerSoft::Train(const NnetExample &eg, const GeneralMatrix &soft_targets) {
+  bool need_model_derivative = true;
+  ComputationRequest request;
+  GetComputationRequest(*nnet_, eg, need_model_derivative,
+                        config_.store_component_stats,
+                        &request);
+  const NnetComputation *computation = compiler_.Compile(request);
+
+  NnetComputer computer(config_.compute_config, *computation,
+                        *nnet_,
+                        (delta_nnet_ == NULL ? nnet_ : delta_nnet_));
+  // give the inputs to the computer object.
+  computer.AcceptInputs(*nnet_, eg.io);
+  computer.Forward();
+
+  this->ProcessOutputs(eg, soft_targets, &computer);
+  computer.Backward();
+
+  if (delta_nnet_ != NULL) {
+    BaseFloat scale = (1.0 - config_.momentum);
+    if (config_.max_param_change != 0.0) {
+      BaseFloat param_delta =
+          std::sqrt(DotProduct(*delta_nnet_, *delta_nnet_)) * scale;
+      if (param_delta > config_.max_param_change) {
+        if (param_delta - param_delta != 0.0) {
+          KALDI_WARN << "Infinite parameter change, will not apply.";
+          SetZero(false, delta_nnet_);
+        } else {
+          scale *= config_.max_param_change / param_delta;
+          KALDI_LOG << "Parameter change too big: " << param_delta << " > "
+                    << "--max-param-change=" << config_.max_param_change
+                    << ", scaling by " << config_.max_param_change / param_delta;
+        }
+      }
+    }
+    AddNnet(*delta_nnet_, scale, nnet_);
+    ScaleNnet(config_.momentum, delta_nnet_);
+  }
+}
+
+void NnetTrainerSoft::ProcessOutputs(const NnetExample &eg,
+                                 const GeneralMatrix &soft_targets,
+                                 NnetComputer *computer) {
+  std::vector<NnetIo>::const_iterator iter = eg.io.begin(),
+      end = eg.io.end();
+  for (; iter != end; ++iter) {
+    const NnetIo &io = *iter;
+    int32 node_index = nnet_->GetNodeIndex(io.name);
+    KALDI_ASSERT(node_index >= 0);
+    if (nnet_->IsOutputNode(node_index)) {
+      ObjectiveType obj_type = nnet_->GetNode(node_index).u.objective_type;
+      BaseFloat tot_weight, tot_objf;
+      bool supply_deriv = true;
+      ComputeObjectiveFunction(soft_targets, obj_type, io.name,
+                               supply_deriv, computer,
+                               &tot_weight, &tot_objf);
+      objf_info_[io.name].UpdateStats(io.name, config_.print_interval,
+                                      num_minibatches_processed_++,
+                                      tot_weight, tot_objf);
+    }
+  }
+}
+
+bool NnetTrainerSoft::PrintTotalStats() const {
+  unordered_map<std::string, ObjectiveFunctionInfo>::const_iterator
+      iter = objf_info_.begin(),
+      end = objf_info_.end();
+  bool ans = false;
+  for (; iter != end; ++iter) {
+    const std::string &name = iter->first;
+    const ObjectiveFunctionInfo &info = iter->second;
+    ans = ans || info.PrintTotalStats(name);
+  }
+  return ans;
+}
+
 void ObjectiveFunctionInfo::UpdateStats(
     const std::string &output_name,
     int32 minibatches_per_phase,
