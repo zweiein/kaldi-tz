@@ -262,6 +262,11 @@ NnetTrainer::~NnetTrainer() {
   delete delta_nnet_;
 }
 
+NnetTrainerSoft::~NnetTrainerSoft() {
+  delete delta_nnet_;
+}
+
+
 void ComputeObjectiveFunction(const GeneralMatrix &supervision,
                               ObjectiveType objective_type,
                               const std::string &output_name,

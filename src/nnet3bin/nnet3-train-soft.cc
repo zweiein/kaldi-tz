@@ -80,13 +80,13 @@ int main(int argc, char *argv[]) {
 
     for (; !example_reader.Done() && !soft_reader.Done(); example_reader.Next(), soft_reader.Next()) {
         if (example_reader.Key() != soft_reader.Key()) {
-            KALDI_WARN << utt << ", missing soft targets";
+            KALDI_WARN << example_reader.Key() << ", missing soft targets";
             continue;
         }
         // knowledge distilling for soft targets
-        CuMatrixBase<BaseFloat> soft_targets_cu= CuMatrixBase<BaseFloat>(soft_reader.Value());
+        CuMatrix<BaseFloat> soft_targets_cu= CuMatrix<BaseFloat>(soft_reader.Value());
         soft_targets_cu.Scale( 1.0 / temperature );
-        CuMatrixBase<BaseFloat> soft_targets_tmp;
+        CuMatrix<BaseFloat> soft_targets_tmp;
         soft_targets_tmp.ApplySoftMaxPerRow(soft_targets_cu);
         const Matrix<BaseFloat>& soft_targets = Matrix<BaseFloat>(soft_targets_tmp);
         
