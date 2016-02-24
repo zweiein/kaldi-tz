@@ -147,9 +147,13 @@ for f in $data/feats.scp $lang/L.fst $alidir/ali.1.gz $alidir/final.mdl $alidir/
   [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
 
-# Get raw of ref_mdl
+# Get raw of ref_mdl, and remove logsoftmax
 ref_raw=$dir/ref_mdl.raw
-nnet3-am-copy --raw=true $ref_mdl $ref_raw
+if [ ! -f $ref_raw ]; then
+  nnet3-am-copy --raw=true --binary=false $ref_mdl $ref_raw
+fi
+ref_raw=$dir/ref_mdl.clean
+[ ! -f $ref_raw  ] && echo "$0: $dir/ref_mdl.raw should be removed logsoftmax by hand to $ref_raw" && exit 1
 
 # Set some variables.
 num_leaves=`tree-info $alidir/tree 2>/dev/null | grep num-pdfs | awk '{print $2}'` || exit 1
