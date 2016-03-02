@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
         "iVectors, and two sets of labels. \n"
         "\n"
         "Usage:  nnet3-get-egs [options] <features-rspecifier> "
-        "<pdf-post-rspecifier> <another-target-rspecifier> <egs-out>\n";
+        "<pdf-post-rspecifier> <another-post-target-rspecifier> <egs-out>\n";
         
 
     bool compress = true;
