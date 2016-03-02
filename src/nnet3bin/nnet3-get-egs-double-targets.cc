@@ -1,4 +1,4 @@
-// nnet3bin/nnet3-get-egs.cc
+// nnet3bin/nnet3-get-egs-double-targets.cc
 
 // Copyright 2012-2015  Johns Hopkins University (author:  Daniel Povey)
 //                2014  Vimal Manohar
@@ -33,9 +33,11 @@ namespace nnet3 {
 static void ProcessFile(const MatrixBase<BaseFloat> &feats,
                         const MatrixBase<BaseFloat> *ivector_feats,
                         const Posterior &pdf_post,
+                        const Posterior &pdf_post_plus,
                         const std::string &utt_id,
                         bool compress,
                         int32 num_pdfs,
+                        int32 num_pdfs_plus,
                         int32 left_context,
                         int32 right_context,
                         int32 frames_per_eg,
@@ -43,6 +45,7 @@ static void ProcessFile(const MatrixBase<BaseFloat> &feats,
                         int64 *num_egs_written,
                         NnetExampleWriter *example_writer) {
   KALDI_ASSERT(feats.NumRows() == static_cast<int32>(pdf_post.size()));
+  KALDI_ASSERT(feats.NumRows() == static_cast<int32>(pdf_post_plus.size()));
   
   for (int32 t = 0; t < feats.NumRows(); t += frames_per_eg) {
 
@@ -89,10 +92,14 @@ static void ProcessFile(const MatrixBase<BaseFloat> &feats,
 
     // add the labels.
     Posterior labels(frames_per_eg);
-    for (int32 i = 0; i < actual_frames_per_eg; i++)
+    Posterior labels_plus(frames_per_eg);
+    for (int32 i = 0; i < actual_frames_per_eg; i++) {
       labels[i] = pdf_post[t + i];
+      labels_plus[i] = pdf_post_plus[t + i];
+    }
     // remaining posteriors for frames are empty.
     eg.io.push_back(NnetIo("output", num_pdfs, 0, labels));
+    eg.io.push_back(NnetIo("output_plus", num_pdfs_plus, 0, labels_plus));
     
     if (compress)
       eg.Compress();
@@ -124,23 +131,15 @@ int main(int argc, char *argv[]) {
         "Get frame-by-frame examples of data for nnet3 neural network training.\n"
         "Essentially this is a format change from features and posteriors\n"
         "into a special frame-by-frame format.  This program handles the\n"
-        "common case where you have some input features, possibly some\n"
-        "iVectors, and one set of labels.  If people in future want to\n"
-        "do different things they may have to extend this program or create\n"
-        "different versions of it for different tasks (the egs format is quite\n"
-        "general)\n"
+        "case where you have some input features, possibly some\n"
+        "iVectors, and two sets of labels. \n"
         "\n"
         "Usage:  nnet3-get-egs [options] <features-rspecifier> "
-        "<pdf-post-rspecifier> <egs-out>\n"
-        "\n"
-        "An example [where $feats expands to the actual features]:\n"
-        "nnet3-get-egs --num-pdfs=2658 --left-context=12 --right-context=9 --num-frames=8 \"$feats\"\\\n"
-        "\"ark:gunzip -c exp/nnet/ali.1.gz | ali-to-pdf exp/nnet/1.nnet ark:- ark:- | ali-to-post ark:- ark:- |\" \\\n"
-        "   ark:- \n";
+        "<pdf-post-rspecifier> <another-target-rspecifier> <egs-out>\n";
         
 
     bool compress = true;
-    int32 num_pdfs = -1, left_context = 0, right_context = 0,
+    int32 num_pdfs = -1, num_pdfs_plus = -1, left_context = 0, right_context = 0,
         num_frames = 1, length_tolerance = 100;
         
     std::string ivector_rspecifier;
@@ -150,6 +149,8 @@ int main(int argc, char *argv[]) {
                 "compressed format.");
     po.Register("num-pdfs", &num_pdfs, "Number of pdfs in the acoustic "
                 "model");
+    po.Register("num-pdfs-plus", &num_pdfs_plus, "Number of pdfs of "
+                "another set of labels");
     po.Register("left-context", &left_context, "Number of frames of left "
                 "context the neural net requires.");
     po.Register("right-context", &right_context, "Number of frames of right "
@@ -163,22 +164,26 @@ int main(int argc, char *argv[]) {
     
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 3) {
+    if (po.NumArgs() != 4) {
       po.PrintUsage();
       exit(1);
     }
 
     if (num_pdfs <= 0)
-      KALDI_ERR << "--num-pdfs options is required.";
+      KALDI_ERR << "--num-pdfs options is required.";    
+    if (num_pdfs_plus <= 0)
+      KALDI_ERR << "--num-pdfs-plus options is required.";
     
 
     std::string feature_rspecifier = po.GetArg(1),
         pdf_post_rspecifier = po.GetArg(2),
-        examples_wspecifier = po.GetArg(3);
+        pdf_post_rspecifier_plus = po.GetArg(3),
+        examples_wspecifier = po.GetArg(4);
 
     // Read in all the training files.
     SequentialBaseFloatMatrixReader feat_reader(feature_rspecifier);
     RandomAccessPosteriorReader pdf_post_reader(pdf_post_rspecifier);
+    RandomAccessPosteriorReader pdf_post_reader_plus(pdf_post_rspecifier_plus);
     NnetExampleWriter example_writer(examples_wspecifier);
     RandomAccessBaseFloatMatrixReader ivector_reader(ivector_rspecifier);
     
@@ -188,13 +193,15 @@ int main(int argc, char *argv[]) {
     for (; !feat_reader.Done(); feat_reader.Next()) {
       std::string key = feat_reader.Key();
       const Matrix<BaseFloat> &feats = feat_reader.Value();
-      if (!pdf_post_reader.HasKey(key)) {
+      if (!pdf_post_reader.HasKey(key) || !pdf_post_reader_plus.HasKey(key)) {
         KALDI_WARN << "No pdf-level posterior for key " << key;
         num_err++;
       } else {
         const Posterior &pdf_post = pdf_post_reader.Value(key);
-        if (pdf_post.size() != feats.NumRows()) {
-          KALDI_WARN << "Posterior has wrong size " << pdf_post.size()
+        const Posterior &pdf_post_plus = pdf_post_reader_plus.Value(key);
+        if (pdf_post.size() != feats.NumRows() || pdf_post_plus.size() != feats.NumRows()) {
+          KALDI_WARN << "Posterior has wrong size " << pdf_post.size() 
+                     << "or" << pdf_post_plus.size()
                      << " versus " << feats.NumRows();
           num_err++;
           continue;
@@ -222,8 +229,8 @@ int main(int argc, char *argv[]) {
           continue;
         }
           
-        ProcessFile(feats, ivector_feats, pdf_post, key, compress,
-                    num_pdfs, left_context, right_context, num_frames,
+        ProcessFile(feats, ivector_feats, pdf_post, pdf_post_plus, key, compress,
+                    num_pdfs, num_pdfs_plus, left_context, right_context, num_frames,
                     &num_frames_written, &num_egs_written,
                     &example_writer);
         num_done++;
