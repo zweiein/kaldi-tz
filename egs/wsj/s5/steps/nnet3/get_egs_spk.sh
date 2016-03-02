@@ -55,14 +55,15 @@ online_ivector_dir=  # can be used if we are including speaker information as iV
 cmvn_opts=  # can be used for specifying CMVN options, if feature type is not lda (if lda,
             # it doesn't make sense to use different options than were used as input to the
             # LDA transform).  This is used to turn off CMVN in the online-nnet experiments.
+spk_num= # how many speakers + 1 silence
 
 echo "$0 $@"  # Print the command line for logging
 
 if [ -f path.sh ]; then . ./path.sh; fi
 . parse_options.sh || exit 1;
 
-if [ $# != 3 ]; then
-  echo "Usage: $0 [opts] <data> <ali-dir> <egs-dir>"
+if [ $# != 4 ]; then
+  echo "Usage: $0 [opts] <data> <speech-ali-dir> <ali-dir> <egs-dir>"
   echo " e.g.: $0 data/train exp/tri3_ali exp/tri4_nnet/egs"
   echo ""
   echo "Main options (for others, see top of script file)"
@@ -87,14 +88,15 @@ if [ $# != 3 ]; then
 fi
 
 data=$1
-alidir=$2
-dir=$3
+alidir_speech=$2
+alidir=$3
+dir=$4
 
 # Check some files.
 [ ! -z "$online_ivector_dir" ] && \
   extra_files="$online_ivector_dir/ivector_online.scp $online_ivector_dir/ivector_period"
 
-for f in $data/feats.scp $alidir/ali.1.gz $alidir/final.mdl $alidir/tree $extra_files; do
+for f in $data/feats.scp $alidir/ali.ark $extra_files; do
   [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
 
@@ -102,9 +104,6 @@ sdata=$data/split$nj
 utils/split_data.sh $data $nj
 
 mkdir -p $dir/log $dir/info
-cp $alidir/tree $dir
-
-num_ali_jobs=$(cat $alidir/num_jobs) || exit 1;
 
 # Get list of validation utterances.
 awk '{print $1}' $data/utt2spk | utils/shuffle_list.pl | head -$num_utts_subset \
@@ -124,9 +123,9 @@ fi
 awk '{print $1}' $data/utt2spk | utils/filter_scp.pl --exclude $dir/valid_uttlist | \
    utils/shuffle_list.pl | head -$num_utts_subset > $dir/train_subset_uttlist || exit 1;
 
-[ -z "$transform_dir" ] && transform_dir=$alidir
+[ -z "$transform_dir" ] && transform_dir=$alidir_speech
 
-# because we'll need the features with a different number of jobs than $alidir,
+# because we'll need the features with a different number of jobs than $alidir_speech,
 # copy to ark,scp.
 if [ -f $transform_dir/trans.1 ] && [ $feat_type != "raw" ]; then
   echo "$0: using transforms from $transform_dir"
@@ -155,9 +154,9 @@ case $feat_type in
     echo $cmvn_opts >$dir/cmvn_opts # caution: the top-level nnet training script should copy this to its own dir now.
    ;;
   lda)
-    splice_opts=`cat $alidir/splice_opts 2>/dev/null`
+    splice_opts=`cat $alidir_speech/splice_opts 2>/dev/null`
     # caution: the top-level nnet training script should copy these to its own dir now.
-    cp $alidir/{splice_opts,cmvn_opts,final.mat} $dir || exit 1;
+    cp $alidir_speech/{splice_opts,cmvn_opts,final.mat} $dir || exit 1;
     [ ! -z "$cmvn_opts" ] && \
        echo "You cannot supply --cmvn-opts option if feature type is LDA." && exit 1;
     cmvn_opts=$(cat $dir/cmvn_opts)
@@ -253,8 +252,7 @@ fi
 
 if [ $stage -le 2 ]; then
   echo "$0: copying data alignments"
-  for id in $(seq $num_ali_jobs); do gunzip -c $alidir/ali.$id.gz; done | \
-    copy-int-vector ark:- ark,scp:$dir/ali.ark,$dir/ali.scp || exit 1;
+  copy-int-vector ark:$alidir/ali.ark ark,scp:$dir/ali.ark,$dir/ali.scp || exit 1;
 fi
 
 egs_opts="--left-context=$left_context --right-context=$right_context --compress=$compress"
@@ -265,7 +263,7 @@ valid_egs_opts="--left-context=$valid_left_context --right-context=$valid_right_
 
 echo $left_context > $dir/info/left_context
 echo $right_context > $dir/info/right_context
-num_pdfs=$(tree-info --print-args=false $alidir/tree | grep num-pdfs | awk '{print $2}')
+num_pdfs=$spk_num
 if [ $stage -le 3 ]; then
   echo "$0: Getting validation and training subset examples."
   rm $dir/.error 2>/dev/null
@@ -276,11 +274,11 @@ if [ $stage -le 3 ]; then
 
   $cmd $dir/log/create_valid_subset.log \
     nnet3-get-egs --num-pdfs=$num_pdfs $valid_ivector_opt $valid_egs_opts "$valid_feats" \
-    "ark,s,cs:ali-to-pdf $alidir/final.mdl scp:$dir/ali_special.scp ark:- | ali-to-post ark:- ark:- |" \
+    "ark,s,cs:ali-to-post scp:$dir/ali_special.scp ark:- |" \
     "ark:$dir/valid_all.egs" || touch $dir/.error &
   $cmd $dir/log/create_train_subset.log \
     nnet3-get-egs --num-pdfs=$num_pdfs $train_subset_ivector_opt $valid_egs_opts "$train_subset_feats" \
-     "ark,s,cs:ali-to-pdf $alidir/final.mdl scp:$dir/ali_special.scp ark:- | ali-to-post ark:- ark:- |" \
+     "ark,s,cs:ali-to-post scp:$dir/ali_special.scp ark:- |" \
      "ark:$dir/train_subset_all.egs" || touch $dir/.error &
   wait;
   [ -f $dir/.error ] && echo "Error detected while creating train/valid egs" && exit 1
@@ -320,7 +318,7 @@ if [ $stage -le 4 ]; then
   # The examples will go round-robin to egs_list.
   $cmd JOB=1:$nj $dir/log/get_egs.JOB.log \
     nnet3-get-egs --num-pdfs=$num_pdfs $ivector_opt $egs_opts --num-frames=$frames_per_eg "$feats" \
-    "ark,s,cs:filter_scp.pl $sdata/JOB/utt2spk $dir/ali.scp | ali-to-pdf $alidir/final.mdl scp:- ark:- | ali-to-post ark:- ark:- |" ark:- \| \
+    "ark,s,cs:filter_scp.pl $sdata/JOB/utt2spk $dir/ali.scp | ali-to-post scp:- ark:- |" ark:- \| \
     nnet3-copy-egs --random=true --srand=JOB ark:- $egs_list || exit 1;
 fi
 

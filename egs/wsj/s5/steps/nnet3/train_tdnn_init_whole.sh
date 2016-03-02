@@ -324,7 +324,17 @@ if [ $stage -le -1 ]; then
   # Add the first layer; this will add in the lda.mat and
   # presoftmax_prior_scale.vec.
   $cmd $dir/log/add_first_layer.log \
-       nnet3-init --srand=-3 $dir/init.raw $dir/configs/layer1.config $dir/0.raw || exit 1;
+       nnet3-init --srand=-3 $dir/init.raw $dir/configs/layer1.config $dir/0.1.raw || exit 1;
+  # Add rest layers here at once
+  x=2
+  while [ $x -le $num_hidden_layers ]; do
+    config=$dir/configs/layer$x.config
+    if [ -f $config ]; then
+      nnet3-init --srand=$x $dir/0.$[$x-1].raw $config $dir/0.$x.raw
+    fi
+    x=$[$x+1]
+  done 
+  cp $dir/0.$num_hidden_layers.raw $dir/0.raw
 
   # Convert to .mdl, train the transitions, set the priors.
   $cmd $dir/log/init_mdl.log \
@@ -475,19 +485,10 @@ while [ $x -lt $num_iters ]; do
 
     echo "Training neural net (pass $x)"
 
-    if [ $x -gt 0 ] && \
-      [ $x -le $[($num_hidden_layers-1)*$add_layers_period] ] && \
-      [ $[$x%$add_layers_period] -eq 0 ]; then
-      do_average=false # if we've just mixed up, don't do averaging but take the
-                       # best.
-      cur_num_hidden_layers=$[1+$x/$add_layers_period]
-      config=$dir/configs/layer$cur_num_hidden_layers.config
-      raw="nnet3-am-copy --raw=true --learning-rate=$this_learning_rate $dir/$x.mdl - | nnet3-init --srand=$x - $config - |"
-    else
-      do_average=true
-      if [ $x -eq 0 ]; then do_average=false; fi # on iteration 0, pick the best, don't average.
-      raw="nnet3-am-copy --raw=true --learning-rate=$this_learning_rate $dir/$x.mdl -|"
-    fi
+    do_average=true
+    if [ $x -eq 0 ]; then do_average=false; fi # on iteration 0, pick the best, don't average.
+    raw="nnet3-am-copy --raw=true --learning-rate=$this_learning_rate $dir/$x.mdl -|"
+    
     if $do_average; then
       this_minibatch_size=$minibatch_size
     else
