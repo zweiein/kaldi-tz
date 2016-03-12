@@ -48,6 +48,8 @@ int main(int argc, char *argv[]) {
     po.Register("learning-rate", &learning_rate,
                 "If supplied, all the learning rates of updatable components"
                 "are set to this value.");
+    po.Register("scale", &scale, "The parameter matrices are scaled"
+                " by the specified value.");
 
     po.Read(argc, argv);
     
@@ -64,6 +66,9 @@ int main(int argc, char *argv[]) {
     
     if (learning_rate >= 0)
       SetLearningRate(learning_rate, &nnet);
+
+    if (scale != 1.0)
+      ScaleNnet(scale, &nnet);
 
     WriteKaldiObject(nnet, raw_nnet_wxfilename, binary_write);
     KALDI_LOG << "Copied raw neural net from " << raw_nnet_rxfilename
