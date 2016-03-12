@@ -42,6 +42,7 @@ int main(int argc, char *argv[]) {
 
     bool binary_write = true;
     BaseFloat learning_rate = -1;
+    BaseFloat scale = 1.0;
     
     ParseOptions po(usage);
     po.Register("binary", &binary_write, "Write output in binary mode");
