@@ -143,12 +143,13 @@ if [ ! -z "$realign_times" ]; then
 fi
 
 # Check some files.
-for f in $data/feats.scp $lang/L.fst $alidir/ali.1.gz $alidir/final.mdl $alidir/tree $alidir_spk/ali.ark $alidir_spk/spk_counts; do
+for f in $data/feats.scp $lang/L.fst $alidir/ali.1.gz $alidir/final.mdl $alidir/tree $alidir_spk/ali.ark $alidir_spk/spk_counts $alidir_spk/spk_num; do
   [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
 
 
 # Set some variables.
+spk_num=`cat $alidir_spk/spk_num` || exit 1;
 num_leaves_spk=$spk_num
 [ -z $num_leaves_spk ] && echo "\$num_leaves_spk is unset" && exit 1
 [ "$num_leaves_spk" -eq "0" ] && echo "\$num_leaves_spk is 0" && exit 1
@@ -302,10 +303,8 @@ fi
 
 
 if [ $stage -le -2 ]; then
-  echo "$0: preparing initial vector for FixedScaleComponent before softmax"
-  echo "  ... using priors^$presoftmax_prior_scale_power and rescaling to average 1"
-
   echo "$0: spk recognition, preparing initial vector for FixedScaleComponent before softmax"
+  echo "  ... using priors^$presoftmax_prior_scale_power and rescaling to average 1"
   awk -v power=$presoftmax_prior_scale_power -v smooth=0.01 \
      '{ for(i=2; i<=NF-1; i++) { count[i-2] = $i;  total += $i; }
         num_pdfs=NF-2;  average_count = total/num_pdfs;
@@ -551,26 +550,6 @@ if [ $stage -le $num_iters ]; then
 fi
 
 if [ $stage -le $[$num_iters+1] ]; then
-  echo "Getting average posterior for purposes of adjusting the priors."
-  # Note: this just uses CPUs, using a smallish subset of data.
-  if [ $num_jobs_compute_prior -gt $num_archives ]; then egs_part=1;
-  else egs_part=JOB; fi
-  rm $dir/post.$x.*.vec 2>/dev/null
-  $cmd JOB=1:$num_jobs_compute_prior $prior_queue_opt $dir/log/get_post.$x.JOB.log \
-    nnet3-copy-egs --frame=random $context_opts --srand=JOB ark:$cur_egs_dir/egs.$egs_part.ark ark:- \| \
-    nnet3-subset-egs --srand=JOB --n=$prior_subset_size ark:- ark:- \| \
-    nnet3-merge-egs ark:- ark:- \| \
-    nnet3-compute-from-egs $prior_gpu_opt --apply-exp=true \
-      $dir/combined.raw ark:- ark:- \| \
-    matrix-sum-rows ark:- ark:- \| vector-sum ark:- $dir/post.$x.JOB.vec || exit 1;
-
-  sleep 3;  # make sure there is time for $dir/post.$x.*.vec to appear.
-
-  $cmd $dir/log/vector_sum.$x.log \
-   vector-sum $dir/post.$x.*.vec $dir/post.$x.vec || exit 1;
-
-  rm $dir/post.$x.*.vec;
-
   nnet3-copy $dir/combined.raw $dir/final.raw
 fi
 

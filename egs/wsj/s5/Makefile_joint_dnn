@@ -1,0 +1,473 @@
+#TK_PATH = /nfs/raid88/thintern/tangzy_sino_1000h_16k_interspeech/tk
+
+
+# running options
+NCPUS = 100
+#USE_SGE = FALSE
+USE_SGE = TRUE
+
+
+#DATA_DIR = /nfs/raid88/thintern/tangzy_sino_1000h_16k_interspeech/data
+#DATA_SET = train
+#CV_SET = cv
+#FEAT_TYPE = mfcc
+##include $(TK_PATH)/common.mk
+
+
+ifeq ($(USE_SGE), TRUE)
+        TRAIN_CMD = "queue.pl -q 110.q"
+else
+        TRAIN_CMD = "run.pl"
+endif
+
+ifeq ($(USE_SGE), TRUE)
+        CUDA_CMD = "queue.pl -q gpu89.q"
+else
+       CUDA_CMD = "run.pl"
+endif
+
+
+#gmm: quick_ali quick_ali_cv
+#dnn: nnet
+
+
+
+######################### self training #############################
+
+start_to_self_train = 10
+self_train_period = 5
+temperature = 2
+
+self_training:
+	steps/nnet3/train_tdnn_self_training.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_a/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --splice-indexes "-5,-4,-3,-2,-1,0,1,2,3,4,5 0 0 0 0 0" \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --pnorm-input-dim 2000 \
+        --pnorm-output-dim 400 \
+        --remove-egs false \
+        --start_to_self_train $(start_to_self_train) \
+        --self_train_period $(self_train_period) \
+        --temperature $(temperature) \
+	data_fbank/train_si284 data_fbank/lang exp/tri4b_ali exp/nnet3/self_train_start$(start_to_self_train)_period$(self_train_period)_T$(temperature)
+
+
+
+
+########## baseline ##########
+###
+speech_baseline:
+	steps/nnet3/train_tdnn_init_whole.sh --stage 33 \
+        --egs-dir exp/nnet3/speech_a/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --splice-indexes "-5,-4,-3,-2,-1,0,1,2,3,4,5 0 0 0 0 0" \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --pnorm-input-dim 2000 \
+        --pnorm-output-dim 400 \
+        --remove-egs false \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/nnet3/speech_a_forward
+
+speech_baseline_refine:
+	steps/nnet3/train_tdnn_init_whole.sh --stage 7 \
+        --egs-dir exp/nnet3/speech_a/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --splice-indexes "-5,-4,-3,-2,-1,0,1,2,3,4,5 0 0 0 0 0" \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --pnorm-input-dim 2000 \
+        --pnorm-output-dim 400 \
+        --remove-egs false \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/nnet3/speech_a_forward_refine
+
+#####
+speech_spk_sequence2_baseline:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_2-batch256/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 200000 \
+        --frames_per_eg 2 \
+        --minibatch_size 256 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_2-batch256_baseline
+
+#####
+spk_baseline:
+	steps/nnet3/train_tdnn_spk_init_whole.sh --stage -6 \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --splice-indexes "-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20 0 0 0" \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --pnorm-input-dim 1000 \
+        --pnorm-output-dim 200 \
+        --remove-egs false \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/spk_a_200
+
+spk_r_baseline:
+	steps/nnet3/train_tdnn_spk_init_from_config.sh --stage -6 \
+        --egs-dir exp/nnet3/spk_a_200/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/spk_a_200_r
+
+spk_r_baseline_sequence:
+	steps/nnet3/train_tdnn_spk_init_from_config_sequence.sh --stage -6 \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/spk_a_200_r_sequence
+
+######## joint training #######
+#### a ###
+speech_spk:
+	steps/nnet3/train_tdnn_speech_spk.sh --stage -6 \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a
+
+speech_spk_sequence8_refine:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage 7 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_8-batch64_refine
+
+speech_spk_sequence8_refine_refine:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage 7 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_8-batch64_refine_refine
+
+speech_spk_sequence8_v2:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_8-batch64_v2
+
+speech_spk_sequence8_v3:
+	steps/nnet3/train_tdnn_speech_spk_sequence_joint_later.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+        --add_joint 10 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_8-batch64_v3_j10
+
+speech_spk_sequence8_v4:
+	steps/nnet3/train_tdnn_speech_spk_sequence_joint_by_step.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_8-batch64_joint_by_step
+
+speech_spk_sequence8_v5:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_8-batch64_dim-reduction
+
+speech_spk_a_sequence8_fifth:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_8-batch64_fifth
+
+speech_spk_a_sequence8_fifth_refine:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage 23 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_8-batch64_fifth_refine
+
+speech_spk_a_sequence8_fifth_refine_refine:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage 7 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_8-batch64_fifth_refine_refine
+
+speech_spk_a_sequence8_fifth_rms10:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_8-batch64_fifth_rms10
+
+####
+speech_spk_sequence2_v5-2:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_2-batch256/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 200000 \
+        --frames_per_eg 2 \
+        --minibatch_size 256 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_2-batch256_dim-reduction
+
+speech_spk_sequence2_v5-2_refine:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage 7 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_2-batch256/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 200000 \
+        --frames_per_eg 2 \
+        --minibatch_size 256 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_2-batch256_dim-reduction_refine
+
+speech_spk_sequence2_v5-2_refine_other_egs:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage 7 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_2-batch256_dim-reduction_fifth_refine_other_egs
+
+speech_spk_sequence2_v5-3:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_2-batch256/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 200000 \
+        --frames_per_eg 2 \
+        --minibatch_size 256 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_2-batch256_dim-reduction_fifth
+
+speech_spk_sequence2_v5-3_refine:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage 7 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_2-batch256/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 200000 \
+        --frames_per_eg 2 \
+        --minibatch_size 256 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_2-batch256_dim-reduction_fifth_refine
+
+speech_spk_sequence2_v5-4:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_2-batch256/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 200000 \
+        --frames_per_eg 2 \
+        --minibatch_size 256 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_2-batch256_dim-reduction_eighth
+
+speech_spk_sequence20:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 20000 \
+        --frames_per_eg 20 \
+        --minibatch_size 100 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_20-batch100
+
+speech_spk_sequence2:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 200000 \
+        --frames_per_eg 2 \
+        --minibatch_size 256 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_2-batch256
+
+speech_spk_sequence4:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 100000 \
+        --frames_per_eg 4 \
+        --minibatch_size 128 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_a_sequence_4-batch128
+
+##### b #####
+speech_spk_b_sequence2:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_2-batch256/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 200000 \
+        --frames_per_eg 2 \
+        --minibatch_size 256 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_b_sequence_2-batch256_fifth
+
+speech_spk_b_sequence2_fine:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage 7 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_2-batch256/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 200000 \
+        --frames_per_eg 2 \
+        --minibatch_size 256 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_b_sequence_2-batch256_fifth_refine
+
+speech_spk_b_sequence8:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_8-batch64/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 50000 \
+        --frames_per_eg 8 \
+        --minibatch_size 64 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_b_sequence_8-batch64_fifth
+
+##### c #####
+speech_spk_c_sequence2:
+	steps/nnet3/train_tdnn_speech_spk_sequence.sh --stage -6 \
+        --egs-dir exp/nnet3/speech_spk_a_sequence_2-batch256/egs \
+        --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+        --feat-type raw \
+        --cmvn-opts "--norm-means=false --norm-vars=false" \
+        --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+        --cmd $(CUDA_CMD) \
+        --remove-egs false --get_egs_stage -40 \
+        --samples_per_iter 200000 \
+        --frames_per_eg 2 \
+        --minibatch_size 256 \
+	data_fbank/train_90 data_fbank/lang exp/tri4b_ali exp/spk_ali exp/nnet3/speech_spk_c_sequence_2-batch256_fifth
+

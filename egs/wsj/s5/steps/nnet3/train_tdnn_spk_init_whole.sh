@@ -143,12 +143,13 @@ if [ ! -z "$realign_times" ]; then
 fi
 
 # Check some files.
-for f in $data/feats.scp $lang/L.fst $alidir/ali.1.gz $alidir/final.mdl $alidir/tree $alidir_spk/ali.ark $alidir_spk/spk_counts; do
+for f in $data/feats.scp $lang/L.fst $alidir/ali.1.gz $alidir/final.mdl $alidir/tree $alidir_spk/ali.ark $alidir_spk/spk_counts $alidir_spk/spk_num; do
   [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
 
 
 # Set some variables.
+spk_num=`cat $alidir_spk/spk_num` || exit 1;
 num_leaves_spk=$spk_num
 [ -z $num_leaves_spk ] && echo "\$num_leaves_spk is unset" && exit 1
 [ "$num_leaves_spk" -eq "0" ] && echo "\$num_leaves_spk is 0" && exit 1

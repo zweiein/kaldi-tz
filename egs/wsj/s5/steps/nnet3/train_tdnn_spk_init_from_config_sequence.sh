@@ -20,10 +20,10 @@ pnorm_input_dim=3000
 pnorm_output_dim=300
 relu_dim=  # you can use this to make it use ReLU's instead of p-norms.
 rand_prune=4.0 # Relates to a speedup we do for LDA.
-minibatch_size=512  # This default is suitable for GPU-based training.
+minibatch_size=64  # This default 512 for tdnn, is suitable for GPU-based training.
                     # Set it to 128 for multi-threaded CPU-based training.
 max_param_change=2.0  # max param change per minibatch
-samples_per_iter=400000 # each iteration of training, see this many samples
+samples_per_iter=50000 # default 400000 for tdnn, each iteration of training, see this many samples
                         # per job.  This option is passed to get_egs.sh
 num_jobs_initial=1  # Number of neural net jobs to run in parallel at the start of training
 num_jobs_final=8   # Number of neural net jobs to run in parallel at the end of training
@@ -252,7 +252,8 @@ num_archives=$(cat $egs_dir/info/num_archives) || { echo "error: no such file $e
 
 # num_archives_expanded considers each separate label-position from
 # 0..frames_per_eg-1 to be a separate archive.
-num_archives_expanded=$[$num_archives*$frames_per_eg]
+# as training with a sequence, we don't expend it: num_archives_expanded=$[$num_archives*$frames_per_eg]
+num_archives_expanded=$num_archives
 
 [ $num_jobs_initial -gt $num_jobs_final ] && \
   echo "$0: --initial-num-jobs cannot exceed --final-num-jobs" && exit 1;
@@ -440,15 +441,11 @@ while [ $x -lt $num_iters ]; do
         k=$[$num_archives_processed + $n - 1]; # k is a zero-based index that we'll derive
                                                # the other indexes from.
         archive=$[($k%$num_archives)+1]; # work out the 1-based archive index.
-        frame=$[(($k/$num_archives)%$frames_per_eg)]; # work out the 0-based frame
-        # index; this increases more slowly than the archive index because the
-        # same archive with different frame indexes will give similar gradients,
-        # so we want to separate them in time.
 
         $cmd $train_queue_opt $dir/log/train.$x.$n.log \
           nnet3-train $parallel_train_opts \
           --max-param-change=$max_param_change "$raw" \
-          "ark:nnet3-copy-egs --frame=$frame $context_opts ark:$cur_egs_dir/egs.$archive.ark ark:- | nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$x ark:- ark:-| nnet3-merge-egs --minibatch-size=$this_minibatch_size --discard-partial-minibatches=true ark:- ark:- |" \
+          "ark:nnet3-copy-egs $context_opts ark:$cur_egs_dir/egs.$archive.ark ark:- | nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$x ark:- ark:-| nnet3-merge-egs --minibatch-size=$this_minibatch_size --discard-partial-minibatches=true ark:- ark:- |" \
           $dir/$[$x+1].$n.raw || touch $dir/.error &
       done
       wait
