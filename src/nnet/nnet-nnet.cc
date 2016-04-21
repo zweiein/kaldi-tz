@@ -619,6 +619,8 @@ void Nnet::SetSeqLengths(const std::vector<int32> &sequence_lengths) {
       BLstmProjectedStreams& comp = dynamic_cast<BLstmProjectedStreams&>(GetComponent(c));
       comp.SetSeqLengths(sequence_lengths);
     }
+    
+    /* ********** Make src ERROR when compile these lines ********
     if (GetComponent(c).GetType() == Component::kLstmParallel) { // support kLstmParallel from eesen(early version)
       LstmParallel& comp = dynamic_cast<LstmParallel&>(GetComponent(c));
       comp.SetSeqLengths(sequence_lengths);
@@ -627,6 +629,7 @@ void Nnet::SetSeqLengths(const std::vector<int32> &sequence_lengths) {
       BiLstmParallel& comp = dynamic_cast<BiLstmParallel&>(GetComponent(c));
       comp.SetSeqLengths(sequence_lengths);
     }
+    ********** */
   }
 }
 
